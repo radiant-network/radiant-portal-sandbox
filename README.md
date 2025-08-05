@@ -45,7 +45,7 @@ kubectl apply -f k8s/minio/
 
 ## Monitor Minio pod are running (1 minutes)
 ```
-k get po | grep minio
+kubectl get po | grep minio
 ```
 
 ## Install postgres
@@ -55,7 +55,7 @@ kubectl apply -f k8s/postgres/
 
 ## Monitor Postgres pod are running (1 minutes)
 ```
-k get po | grep postgres
+kubectl get po | grep postgres
 ```
 
 ## Install Iceberg REST Catalog
@@ -65,7 +65,7 @@ kubectl apply -f k8s/iceberg-rest/
 
 ## Monitor Iceberg catalog pod are running (1 minutes)
 ```
-k get po | grep iceberg
+kubectl get po | grep iceberg
 ```
 
 ## Install locally mc (minio client)
@@ -85,7 +85,7 @@ kubectl apply -f k8s/init-iceberg-catalog
 
 ## Monitor Iceberg Init catalog pod are completed (5 minutes the first time, due to large image pulling)
 ```
-k get po | grep iceberg
+kubectl get po | grep iceberg
 ```
 
 ## Install Starrocks
@@ -95,7 +95,7 @@ kubectl apply -f k8s/starrocks/
 
 ## Monitor Starrocks pod are running (5 minutes the first time, due to large image pulling)
 ```
-k get po | grep starrocks
+kubectl get po | grep starrocks
 ```
 
 ## Install keycloak
