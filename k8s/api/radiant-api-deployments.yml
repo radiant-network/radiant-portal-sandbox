@@ -20,11 +20,6 @@ spec:
           env:
             - name: DB_USERNAME
               value: root
-#            - name: DB_PASSWORD
-#              valueFrom:
-#                secretKeyRef:
-#                  name: starrocks-qa-radiant-credentials
-#                  key: password
             - name: DB_HOST
               value: radiant-starrocks-fe
             - name: DB_PORT
@@ -44,9 +39,9 @@ spec:
             - name: PGDATABASE
               value: radiant
             - name: KEYCLOAK_HOST
-              value: https://auth.qa.juno.cqdg.ferlab.bio
+              value: http://radiant-keycloak:8282
             - name: KEYCLOAK_REALM
-              value: CQDG
+              value: Radiant
             - name: KEYCLOAK_CLIENT
               value: radiant
             - name: KEYCLOAK_CLIENT_ROLE
