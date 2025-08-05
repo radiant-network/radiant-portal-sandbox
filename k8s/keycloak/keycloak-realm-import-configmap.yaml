@@ -2491,5 +2491,5 @@ data:
 kind: ConfigMap
 metadata:
   labels:
-    io.kompose.service: keycloak
+    app: keycloak
   name: keycloak-realm-import
