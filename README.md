@@ -33,6 +33,11 @@ minikube config set cpus 4
 minikube addons enable metrics-server
 ```
 
+## Run minikube tunnel in a separate terminal
+```
+minikube tunnel
+```
+
 ## Install minio
 ```
 kubectl apply -f k8s/minio/
