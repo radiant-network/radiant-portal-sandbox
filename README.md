@@ -132,12 +132,27 @@ helm install airflow apache-airflow/airflow -f values/airflow-values.yaml
 ```
 Took 5 minutes to install Airflow
 
+## Configure airflow
+Connect to the Airflow UI at http://localhost:8080
+- Username: airflow
+- Password: airflow
+
+Then Activate all the dags by sliding the toggle button of each dag to the right.
+
+Configure the pools :
+- Go to Admin -> Pools
+- Create a new pool named "import_part" with 1 slot
+- Create a new pool named "import_vcf" with 128 slots
+
 ## Run dags
 - Run dag [QA] Radiant - Init Simulated Clinical Data
+  - Set vcf_bucket_prefix to s3://vcf
 - Run dag Radiant - Init StarRocks Tables (~ 10 minutes)
 - Run dag  Radiant - Init Iceberg Tables (~ 2 minutes)
 - Run dag Radiant - Import Open Data (~ 10 minutes)
   - In raw_rcv_filepaths, set the value s3://warehouse/input_parquet/clinvar_rcv_summary/*.json
+- Run dag Radiant - Scheduled Import (~ 10 minutes)
+
 
 ## Edit /etc/host file 
 Add the following line to your /etc/hosts file to access the keycloak admin console:
@@ -180,3 +195,5 @@ Open a new browser tab and go to http://localhost:3000
 
 You should be redirect to keycloak login page. Put the username and password you just created.
 Then you should be able to see the case list page.
+
+If you click on Case 1 (Family trio) or case 8 (Solo) you should be able to click on Variants tab and see the variants for the case.

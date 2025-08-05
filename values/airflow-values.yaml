@@ -30,7 +30,7 @@ logs:
 images:
   airflow:
     repository: ghcr.io/radiant-network/radiant-airflow
-    tag: 1.0.4
+    tag: 1.0.5
     pullPolicy: IfNotPresent
 
 data:
