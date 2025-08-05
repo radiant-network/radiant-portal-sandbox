@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: pg-init-job
+  name: postgres-init-job
 spec:
   template:
     spec:
@@ -35,4 +35,4 @@ spec:
       volumes:
         - name: init-scripts
           configMap:
-            name: pg-init-scripts
+            name: postgres-init-scripts

@@ -1,11 +1,8 @@
 apiVersion: v1
 kind: Service
 metadata:
-  annotations:
-    kompose.cmd: kompose convert -f docker-compose.yml -o k8s/
-    kompose.version: 1.36.0 (HEAD)
   labels:
-    io.kompose.service: radiant-minio
+    app: radiant-minio
   name: radiant-minio
 spec:
   type: LoadBalancer
@@ -17,4 +14,4 @@ spec:
       port: 9000
       targetPort: 9000
   selector:
-    io.kompose.service: radiant-minio
+    app: radiant-minio

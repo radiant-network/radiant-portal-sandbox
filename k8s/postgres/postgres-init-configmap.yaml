@@ -7,4 +7,4 @@ data:
     CREATE DATABASE keycloak WITH OWNER postgres;
 kind: ConfigMap
 metadata:
-  name: pg-init-scripts
+  name: postgres-init-scripts

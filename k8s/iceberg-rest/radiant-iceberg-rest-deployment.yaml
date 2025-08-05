@@ -1,24 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  annotations:
-    kompose.cmd: kompose convert -f docker-compose.yml -o k8s/
-    kompose.version: 1.36.0 (HEAD)
   labels:
-    io.kompose.service: radiant-iceberg-rest
+    app: radiant-iceberg-rest
   name: radiant-iceberg-rest
 spec:
   replicas: 1
   selector:
     matchLabels:
-      io.kompose.service: radiant-iceberg-rest
+      app: radiant-iceberg-rest
   template:
     metadata:
       annotations:
         kompose.cmd: kompose convert -f docker-compose.yml -o k8s/
         kompose.version: 1.36.0 (HEAD)
       labels:
-        io.kompose.service: radiant-iceberg-rest
+        app: radiant-iceberg-rest
     spec:
       containers:
         - env:
