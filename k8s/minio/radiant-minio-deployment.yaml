@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: kompose convert -f docker-compose.yml -o k8s/
+    kompose.version: 1.36.0 (HEAD)
+  labels:
+    io.kompose.service: radiant-minio
+  name: radiant-minio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: radiant-minio
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: kompose convert -f docker-compose.yml -o k8s/
+        kompose.version: 1.36.0 (HEAD)
+      labels:
+        io.kompose.service: radiant-minio
+    spec:
+      containers:
+        - args:
+            - server
+            - /data
+            - --console-address
+            - :9001
+          env:
+            - name: MINIO_DOMAIN
+              value: radiant-minio
+            - name: MINIO_ROOT_PASSWORD
+              value: password
+            - name: MINIO_ROOT_USER
+              value: admin
+          image: minio/minio:RELEASE.2024-10-29T16-01-48Z
+          name: radiant-minio
+          ports:
+            - containerPort: 9001
+              protocol: TCP
+            - containerPort: 9000
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /data
+              name: minio-data-volume
+      restartPolicy: Always
+      volumes:
+        - name: minio-data-volume
+          persistentVolumeClaim:
+            claimName: minio-data-volume

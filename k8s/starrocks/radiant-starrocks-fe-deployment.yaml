@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: radiant-starrocks-fe-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: radiant-starrocks-fe
+  name: radiant-starrocks-fe
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: radiant-starrocks-fe
+  template:
+    metadata:
+      labels:
+        app: radiant-starrocks-fe
+    spec:
+      containers:
+        - args:
+            - bash
+            - -c
+            - |
+              echo 'run_mode = shared_data' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'cloud_native_storage_type = S3' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'aws_s3_path = starrocks/' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'aws_s3_region = us-east-1' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'aws_s3_endpoint = http://radiant-minio:9000' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'aws_s3_access_key = admin' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'aws_s3_secret_key = password' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'enable_udf = true' >> /opt/starrocks/fe/conf/fe.conf
+              exec /opt/starrocks/fe/bin/start_fe.sh --host_type FQDN
+          image: starrocks/fe-ubuntu:3.4.2
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - '/usr/bin/mysql -u root -h radiant-starrocks-fe -P 9030 -e "SHOW FRONTENDS\\G" | grep "Alive: true"'
+            failureThreshold: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          name: radiant-starrocks-fe
+          ports:
+            - containerPort: 8030
+              protocol: TCP
+            - containerPort: 9020
+              protocol: TCP
+            - containerPort: 9030
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /opt/starrocks/fe/meta
+              name: radiant-starrocks-fe-pvc
+      hostname: radiant-starrocks-fe
+      restartPolicy: Always
+      volumes:
+        - name: radiant-starrocks-fe-pvc
+          persistentVolumeClaim:
+            claimName: radiant-starrocks-fe-pvc

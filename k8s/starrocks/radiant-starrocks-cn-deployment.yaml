@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: radiant-starrocks-cn
+  name: radiant-starrocks-cn
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: radiant-starrocks-cn
+  template:
+    metadata:
+      labels:
+        app: radiant-starrocks-cn
+    spec:
+      initContainers:
+        - name: wait-for-fe
+          image: busybox
+          command: ['sh', '-c', 'until wget -qO- http://radiant-starrocks-fe:8030/api/bootstrap; do echo "Waiting for FE..."; sleep 5; done']
+      containers:
+        - args:
+            - bash
+            - -c
+            - |2
+                ulimit -u 65535;
+                ulimit -n 65535;
+                sleep 15;
+                mysql --connect-timeout 2 -h radiant-starrocks-fe -P 9030 -u root -e "ALTER SYSTEM ADD COMPUTE NODE \"radiant-starrocks-cn:9050\";"
+                bash /opt/starrocks/be/bin/start_cn.sh
+          env:
+            - name: HOST_TYPE
+              value: FQDN
+          image: starrocks/cn-ubuntu:3.4.2
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - '/usr/bin/mysql -u root -h radiant-starrocks-fe -P 9030 -e "SHOW COMPUTE NODES\G" |grep "Alive: true"'
+            failureThreshold: 3
+            periodSeconds: 10
+            timeoutSeconds: 5
+          name: radiant-starrocks-cn
+          ports:
+            - containerPort: 8040
+              protocol: TCP
+            - containerPort: 8060
+              protocol: TCP
+            - containerPort: 9050
+              protocol: TCP
+            - containerPort: 9060
+              protocol: TCP
+            - containerPort: 9070
+              protocol: TCP
+      hostname: radiant-starrocks-cn
+      restartPolicy: Always

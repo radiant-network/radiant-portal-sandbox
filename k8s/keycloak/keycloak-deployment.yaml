@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: radiant-keycloak
+  name: radiant-keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: radiant-keycloak
+  template:
+    metadata:
+      labels:
+        app: radiant-keycloak
+    spec:
+      containers:
+        - args:
+            - start-dev
+            - --import-realm
+          env:
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL_HOST
+              value: postgres
+            - name: KC_DB_URL_DATABASE
+              value: keycloak
+            - name: KC_DB_USERNAME
+              value: postgres
+            - name: KC_DB_PASSWORD
+              value: postgres
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_HOSTNAME
+              value: radiant-keycloak
+            - name: KC_HOSTNAME_PORT
+              value: "8282"
+            - name: KC_HTTP_PORT
+              value: "8282"
+            - name: KC_HOSTNAME_STRICT
+              value: "false"
+            - name: KC_HOSTNAME_STRICT_HTTS
+              value: "false"
+            - name: KC_LOG_LEVEL
+              value: info
+            - name: KC_METRICS_ENABLED
+              value: "true"
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              value: admin
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              value: admin
+          image: quay.io/keycloak/keycloak:latest
+          name: keycloak
+#          livenessProbe:
+#            httpGet:
+#              path: /health/live
+#              port: 8282
+#            initialDelaySeconds: 60
+#            periodSeconds: 10
+#            timeoutSeconds: 5
+#            failureThreshold: 5
+          ports:
+            - containerPort: 8282
+              protocol: TCP
+            - containerPort: 9000
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /opt/keycloak/data/import
+              name: keycloak-realm-import
+      restartPolicy: Always
+      volumes:
+        - configMap:
+            name: keycloak-realm-import
+          name: keycloak-realm-import

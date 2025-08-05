@@ -1,0 +1,88 @@
+executor: "KubernetesExecutor"
+# Default airflow tag to deploy
+defaultAirflowTag: "2.10.5"
+# Airflow version (Used to make some decisions based on Airflow Version being deployed)
+airflowVersion: "2.10.5"
+webserver:
+  service:
+    type: LoadBalancer
+  defaultUser:
+    enabled: true
+    username: airflow
+    password: airflow
+
+postgresql:
+  enabled: false
+
+dags:
+  persistence:
+    enabled: true
+    existingClaim: radiant-dags-pvc
+#    subPath: ""
+  gitSync:
+    enabled: false
+
+logs:
+  persistence:
+    enabled: true
+    existingClaim: radiant-logs-pvc
+
+images:
+  airflow:
+    repository: ghcr.io/radiant-network/radiant-airflow
+    tag: 1.0.4
+    pullPolicy: IfNotPresent
+
+data:
+  metadataConnection:
+    user: postgres
+    pass: postgres
+    protocol: postgresql
+    host: postgres
+    port: 5432
+    db: airflow
+
+extraEnv: |
+  - name: PYTHONPATH
+    value: /opt/airflow/dags
+  - name: AWS_REGION
+    value: us-east-1
+  - name: AWS_ACCESS_KEY_ID
+    value: admin
+  - name: AWS_SECRET_ACCESS_KEY
+    value: password
+  - name: AWS_ENDPOINT_URL
+    value: "http://radiant-minio:9000"
+  - name: AWS_ALLOW_HTTP
+    value: "true"
+  - name: PYICEBERG_CATALOG__DEFAULT__URI
+    value: "http://radiant-iceberg-rest:8181"
+  - name: PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT
+    value: "http://radiant-minio:9000"
+  - name: PYICEBERG_CATALOG__DEFAULT__TOKEN
+    value: mysecret
+  - name: RADIANT_ICEBERG_NAMESPACE
+    value: radiant
+  - name: AIRFLOW_CONN_STARROCKS_CONN
+    value: "mysql://root@radiant-starrocks-fe:9030/radiant"  
+  - name: AIRFLOW_CONN_RADIANT_POSTGRES_CONN
+    value: "postgresql://postgres:postgres@postgres:5432/radiant"
+
+
+#env:
+#  - name: AIRFLOW__CORE__DAGS_FOLDER
+#    value: /opt/airflow/dags
+#  - name: AWS_ACCESS_KEY_ID
+#    valueFrom:
+#      secretKeyRef:
+#        name: minio-creds
+#        key: accessKey
+#  - name: AWS_SECRET_ACCESS_KEY
+#    valueFrom:
+#      secretKeyRef:
+#        name: minio-creds
+#        key: secretKey
+#
+#extraVolumeMounts:
+#  - name: dags
+#    mountPath: /opt/airflow/dags

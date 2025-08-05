@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: radiant-portal-ui
+  name: radiant-portal-ui
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 3000
+      protocol: TCP
+      targetPort: 3000
+  selector:
+    app: radiant-portal-ui

@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: radiant-portal-ui
+  name: radiant-portal-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: radiant-portal-ui
+  template:
+    metadata:
+      labels:
+        app: radiant-portal-ui
+    spec:
+      containers:
+      - image: ghcr.io/radiant-network/radiant-portal:20bd29c-1754065482 # {"$imagepolicy": "cqdg-qa-fluxcd:radiant-portal-ui"}
+        name: radiant-portal-ui
+        ports:
+        - containerPort: 3000
+        env:
+        - name: PORTAL_HOST
+          value: http://localhost:3000
+        - name: API_HOST
+          value: http://radiant-api:8090
+        - name: KEYCLOAK_HOST
+          value: http://radiant-keycloak:8282
+        - name: KEYCLOAK_REALM
+          value: Radiant
+        - name: KEYCLOAK_CLIENT
+          value: radiant
+        - name: KEYCLOAK_CLIENT_SECRET
+          value: "ShutThisIsASecret!"
+        - name: SESSION_SECRET
+          value: secret

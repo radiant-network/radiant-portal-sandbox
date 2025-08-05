@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: radiant-starrocks-cn
+  name: radiant-starrocks-cn
+spec:
+  ports:
+    - name: "8040"
+      port: 8040
+      targetPort: 8040
+    - name: "8060"
+      port: 8060
+      targetPort: 8060
+    - name: "9050"
+      port: 9050
+      targetPort: 9050
+    - name: "9060"
+      port: 9060
+      targetPort: 9060
+    - name: "9070"
+      port: 9070
+      targetPort: 9070
+  selector:
+    app: radiant-starrocks-cn

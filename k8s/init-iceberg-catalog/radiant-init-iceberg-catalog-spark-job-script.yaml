@@ -1,0 +1,19 @@
+apiVersion: v1
+data:
+  copy_parquet.py: |-
+    from pyspark.sql import SparkSession
+
+    spark = SparkSession.builder.getOrCreate()
+    tables = ["clinvar", "1000_genomes", "gnomad_genomes_v3", 
+              "dbsnp", "dbnsfp", "spliceai_enriched", "topmed_bravo",
+              "cosmic_gene_set", "ddd_gene_set", "hpo_gene_set", "omim_gene_set", "orphanet_gene_set",
+              "gnomad_constraint_v_2_1_1", "hpo_term", "mondo_term"]
+    for table in tables:
+        # Read Parquet files from MinIO
+        df = spark.read.parquet(f"s3a://warehouse/input_parquet/{table}/")
+        # Write to Iceberg table via REST catalog
+        df.writeTo(f"iceberg.radiant.{table}").createOrReplace()
+kind: ConfigMap
+metadata:
+  name: radiant-init-iceberg-catalog-spark-job-script
+

@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: radiant-api
+  name: radiant-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: radiant-api
+  template:
+    metadata:
+      labels:
+        app: radiant-api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/radiant-network/radiant-api:20bd29c-1754065395
+          env:
+            - name: DB_USERNAME
+              value: root
+#            - name: DB_PASSWORD
+#              valueFrom:
+#                secretKeyRef:
+#                  name: starrocks-qa-radiant-credentials
+#                  key: password
+            - name: DB_HOST
+              value: radiant-starrocks-fe
+            - name: DB_PORT
+              value: "9030"
+            - name: DB_NAME
+              value: radiant
+            - name: PGUSER
+              value: postgres
+            - name: PGPASSWORD
+              value: postgres
+            - name: PGHOST
+              value: postgres
+            - name: PGSSLMODE
+              value: disable
+            - name: PGPORT
+              value: "5432"
+            - name: PGDATABASE
+              value: radiant
+            - name: KEYCLOAK_HOST
+              value: https://auth.qa.juno.cqdg.ferlab.bio
+            - name: KEYCLOAK_REALM
+              value: CQDG
+            - name: KEYCLOAK_CLIENT
+              value: radiant
+            - name: KEYCLOAK_CLIENT_ROLE
+              value: radiant
+            - name: PUBMED_BASE_URL
+              value: https://api.ncbi.nlm.nih.gov
+            - name: CORS_ALLOWED_ORIGINS
+              value: "*"
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: 8090
+            initialDelaySeconds: 300
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 8090
+            initialDelaySeconds: 30
+            timeoutSeconds: 1

@@ -1,0 +1,69 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: radiant-starrocks-init-job
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: wait-for-starrocks
+          image: starrocks/cn-ubuntu:3.4.2
+          command: ['sh', '-c', 'until /usr/bin/mysql -u root -h radiant-starrocks-fe -P 9030 -e "SHOW COMPUTE NODES\G" |grep "Alive: true"; do echo waiting for postgres; sleep 2; done']
+
+      containers:
+        - name: init-starrocks
+          image: starrocks/cn-ubuntu:3.4.2
+          command:
+            - sh
+            - -c
+            - |
+              echo 'Initializing StarRocks...' && \
+              mysql -h radiant-starrocks-fe -P 9030 -u root -e "
+                CREATE STORAGE VOLUME starrocks_storage_volume
+                TYPE = S3
+                LOCATIONS = ('s3://starrocks')
+                PROPERTIES
+                (
+                  'enabled' = 'true',
+                  'aws.s3.region' = 'us-east-1',
+                  'aws.s3.endpoint' = 'http://radiant-minio:9000',
+                  'aws.s3.access_key' = 'admin',
+                  'aws.s3.secret_key' = 'password',
+                  'aws.s3.enable_partitioned_prefix' = 'true'
+                );
+                SET starrocks_storage_volume AS DEFAULT STORAGE VOLUME;" && \
+              sleep 15; \
+              echo 'Create radiant database...' && \
+              mysql -u root -h radiant-starrocks-fe -P 9030 -e "CREATE DATABASE IF NOT EXISTS radiant" && \
+              sleep 15; \
+              echo 'Create radiant iceberg catalog...' && \
+              mysql -h radiant-starrocks-fe -P 9030 -u root -e "
+                CREATE EXTERNAL CATALOG 'radiant_iceberg_catalog'
+                COMMENT 'External catalog to Apache Iceberg on MinIO'
+                PROPERTIES
+                (
+                'type'='iceberg',
+                'iceberg.catalog.type'='rest',
+                'iceberg.catalog.uri'='http://radiant-iceberg-rest:8181',
+                'iceberg.catalog.token' = 'mysecret',
+                'aws.s3.region'='us-east-1',
+                'aws.s3.access_key'='admin',
+                'aws.s3.secret_key'='password',
+                'aws.s3.endpoint'='http://radiant-minio:9000',
+                'aws.s3.enable_path_style_access'='true',
+                'client.factory'='com.starrocks.connector.share.iceberg.IcebergAwsClientFactory'
+                );" && \
+              sleep 15; \
+              echo 'Create radiant jdbc catalog...' && \
+              mysql -h radiant-starrocks-fe -P 9030 -u root -e "
+                CREATE EXTERNAL CATALOG radiant_jdbc
+                PROPERTIES (
+                'driver_class'='org.postgresql.Driver',
+                'checksum'='bef0b2e1c6edcd8647c24bed31e1a4ac',
+                'driver_url'='https://repo1.maven.org/maven2/org/postgresql/postgresql/42.3.3/postgresql-42.3.3.jar',
+                'type'='jdbc',
+                'user'='postgres',
+                'password'='postgres',
+                'jdbc_uri'='jdbc:postgresql://postgres:5432/radiant'
+              );"
+      restartPolicy: OnFailure

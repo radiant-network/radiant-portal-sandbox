@@ -1,0 +1,10 @@
+apiVersion: v1
+data:
+  init.sql: |
+    CREATE DATABASE airflow WITH OWNER postgres;
+    CREATE DATABASE radiant WITH OWNER postgres;
+    CREATE DATABASE iceberg_catalog WITH OWNER postgres;
+    CREATE DATABASE keycloak WITH OWNER postgres;
+kind: ConfigMap
+metadata:
+  name: pg-init-scripts
