@@ -1,4 +1,4 @@
-executor: "KubernetesExecutor"
+executor: "CeleryExecutor"
 # Default airflow tag to deploy
 defaultAirflowTag: "2.10.5"
 # Airflow version (Used to make some decisions based on Airflow Version being deployed)
@@ -10,6 +10,9 @@ webserver:
     enabled: true
     username: airflow
     password: airflow
+config:
+  api:
+    auth_backends: "airflow.api.auth.backend.basic_auth"
 
 postgresql:
   enabled: false
