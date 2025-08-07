@@ -231,11 +231,11 @@ Configure the pools :
 Trigger the following dags in order. Each dag takes a few minutes to run. Wait for each dag to complete before triggering the next one.
 1. Trigger dag `[QA] Radiant - Init Simulated Clinical Data`
    - Set vcf_bucket_prefix to `s3://vcf`
-2. Trigger dag `Radiant - Init StarRocks Tables` (~ 10 minutes)
-3. Trigger dag  `Radiant - Init Iceberg Tables` (~ 2 minutes)
-4. Trigger dag `Radiant - Import Open Data` (~ 10 minutes)
+2. Trigger dag `Radiant - Init StarRocks Tables` (~ 2 minutes)
+3. Trigger dag  `Radiant - Init Iceberg Tables` (~ 1 minutes)
+4. Trigger dag `Radiant - Import Open Data` (~ 5 minutes)
    - In raw_rcv_filepaths, set the value `s3://warehouse/input_parquet/clinvar_rcv_summary/*.json`
-5. Trigger dag `Radiant - Scheduled Import` (~ 10 minutes)
+5. Trigger dag `Radiant - Scheduled Import` (~ 5 minutes)
 
 
 ## Edit /etc/host file 
