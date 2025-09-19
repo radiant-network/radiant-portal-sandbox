@@ -7,7 +7,7 @@ data:
     tables = ["clinvar", "1000_genomes", "gnomad_genomes_v3", 
               "dbsnp", "dbnsfp", "spliceai_enriched", "topmed_bravo",
               "cosmic_gene_set", "ddd_gene_set", "hpo_gene_set", "omim_gene_set", "orphanet_gene_set",
-              "gnomad_constraint_v_2_1_1", "hpo_term", "mondo_term"]
+              "gnomad_constraint_v_2_1_1", "hpo_term", "mondo_term", "ensembl_gene", "ensembl_transcript", "ensembl_exon_by_gene",]
     for table in tables:
         # Read Parquet files from MinIO
         df = spark.read.parquet(f"s3a://warehouse/input_parquet/{table}/")

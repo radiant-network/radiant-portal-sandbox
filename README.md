@@ -235,6 +235,7 @@ Trigger the following dags in order. Each dag takes a few minutes to run. Wait f
 3. Trigger dag  `Radiant - Init Iceberg Tables` (~ 1 minutes)
 4. Trigger dag `Radiant - Import Open Data` (~ 5 minutes)
    - In raw_rcv_filepaths, set the value `s3://warehouse/input_parquet/clinvar_rcv_summary/*.json`
+   - In cytoband_filepath, set the value `s3://warehouse/input_parquet/cytoband/*.txt.gz`
 5. Trigger dag `Radiant - Scheduled Import` (~ 5 minutes)
 
 
