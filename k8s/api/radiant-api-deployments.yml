@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: ghcr.io/radiant-network/radiant-api:latest
+          image: ghcr.io/radiant-network/radiant-api:f83915a-1759275255
           env:
             - name: DB_USERNAME
               value: root

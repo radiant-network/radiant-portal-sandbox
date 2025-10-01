@@ -185,11 +185,23 @@ git clone git@github.com:radiant-network/radiant-portal-pipeline.git
 ```
 
 Then in a new terminal, run the following command to mount the dags directory in minikube:
-```
+``` 
 minikube mount $(pwd)/radiant-portal-pipeline/radiant:/opt/airflow/dags/radiant
 ```
 Let this command run in a separate terminal while you are working with Airflow.
 
+## Pre-building the Radiant task operator image (~6 minutes)
+
+(This step is optional if you have access to the `radiant-network` Github packages, otherwise it is required.)
+
+Inside the `radiant-portal-pipeline` directory, run the following command to build the Radiant task operator image:
+
+```
+eval $(minikube -p minikube docker-env)  # To ensure the image is built inside minikube's docker environment
+docker build -t ghcr.io/radiant-network/radiant-airflow-task-operator:1.0.5 -f Dockerfile.radiant.operator .
+```
+
+**Important note:** Ensure the image's name and tag matches with the `RADIANT_TASK_OPERATOR_IMAGE` from the `values/airflow-values.yaml` file.
 
 ## Install airflow volumes for logs and dags
 ```

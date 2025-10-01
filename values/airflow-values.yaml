@@ -70,7 +70,16 @@ extraEnv: |
     value: "mysql://root@radiant-starrocks-fe:9030/radiant"  
   - name: AIRFLOW_CONN_RADIANT_POSTGRES_CONN
     value: "postgresql://postgres:postgres@postgres:5432/radiant"
-
+  - name: AIRFLOW_CONN_KUBERNETES_CONN
+    value: "kubernetes://?extra__kubernetes__in_cluster=True&extra__kubernetes__namespace=radiant"
+  - name: RADIANT_TASK_OPERATOR_KUBERNETES_NAMESPACE
+    value: radiant
+  - name: RADIANT_TASK_OPERATOR_IMAGE
+    value: "ghcr.io/radiant-network/radiant-airflow-task-operator:1.0.5"
+  - name: RADIANT_TASK_OPERATOR_PYTHONPATH
+    value: "/opt/radiant"
+  - name: RADIANT_TASK_OPERATOR_LD_LIBRARY_PATH
+    value: "/usr/local/lib:$LD_LIBRARY_PATH"
 
 #env:
 #  - name: AIRFLOW__CORE__DAGS_FOLDER
