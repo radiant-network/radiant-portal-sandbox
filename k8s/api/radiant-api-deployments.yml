@@ -50,6 +50,11 @@ spec:
               value: https://api.ncbi.nlm.nih.gov
             - name: CORS_ALLOWED_ORIGINS
               value: "*"
+            - name: RADIANT_AUTHORIZATION_PROVIDER
+              value: openfga
+            - name: RADIANT_AUTHORIZATION_OPENFGA_ENDPOINT
+              value: http://openfga:8180
+
           livenessProbe:
             httpGet:
               path: /status
