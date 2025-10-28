@@ -215,8 +215,6 @@ Let this command run in a separate terminal while you are working with Airflow.
 
 ## Pre-building the Radiant task operator image (~6 minutes)
 
-(This step is optional if you have access to the `radiant-network` Github packages, otherwise it is required.)
-
 Inside the `radiant-portal-pipeline` directory, run the following command to build the Radiant task operator image:
 
 ```
