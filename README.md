@@ -151,7 +151,6 @@ kubectl apply -f k8s/api/
 ```
 kubectl get po | grep api
 ```
-
 Results 1 pod running :
 ```
 radiant-api-6d58b89d8b-gkf8r             0/1     Running     0          25s
@@ -186,7 +185,7 @@ git clone git@github.com:radiant-network/radiant-portal-pipeline.git
 ```
 
 Then in a new terminal, run the following command to mount the dags directory in minikube:
-``` 
+```
 minikube mount $(pwd)/radiant-portal-pipeline/radiant:/opt/airflow/dags/radiant
 ```
 Let this command run in a separate terminal while you are working with Airflow.
