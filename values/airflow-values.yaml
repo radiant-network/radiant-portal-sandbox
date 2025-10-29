@@ -75,7 +75,7 @@ extraEnv: |
   - name: RADIANT_TASK_OPERATOR_KUBERNETES_NAMESPACE
     value: radiant
   - name: RADIANT_TASK_OPERATOR_IMAGE
-    value: "ghcr.io/radiant-network/radiant-airflow-task-operator:1.0.5"
+    value: "ghcr.io/radiant-network/radiant-airflow-task-operator:latest"
   - name: RADIANT_TASK_OPERATOR_PYTHONPATH
     value: "/opt/radiant"
   - name: RADIANT_TASK_OPERATOR_LD_LIBRARY_PATH

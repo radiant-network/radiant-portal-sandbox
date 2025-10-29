@@ -15,7 +15,7 @@ spec:
         app: radiant-portal-ui
     spec:
       containers:
-      - image: ghcr.io/radiant-network/radiant-portal:f83915a-1759275255 # {"$imagepolicy": "cqdg-qa-fluxcd:radiant-portal-ui"}
+      - image: ghcr.io/radiant-network/radiant-portal:e898141-1761676956
         name: radiant-portal-ui
         ports:
         - containerPort: 3000
