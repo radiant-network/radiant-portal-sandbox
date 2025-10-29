@@ -76,8 +76,6 @@ extraEnv: |
     value: "ghcr.io/radiant-network/radiant-airflow-task-operator:latest"
   - name: RADIANT_TASK_OPERATOR_PYTHONPATH
     value: "/opt/radiant"
-  - name: RADIANT_TASK_OPERATOR_LD_LIBRARY_PATH
-    value: "/usr/local/lib:$LD_LIBRARY_PATH"
 
 #env:
 #  - name: AIRFLOW__CORE__DAGS_FOLDER
