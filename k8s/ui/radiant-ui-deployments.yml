@@ -15,7 +15,7 @@ spec:
         app: radiant-portal-ui
     spec:
       containers:
-      - image: ghcr.io/radiant-network/radiant-portal:e898141-1761676956
+      - image: ghcr.io/radiant-network/radiant-portal:latest
         name: radiant-portal-ui
         ports:
         - containerPort: 3000
