@@ -190,6 +190,16 @@ minikube mount $(pwd)/radiant-portal-pipeline/radiant:/opt/airflow/dags/radiant
 ```
 Let this command run in a separate terminal while you are working with Airflow.
 
+## Pre-building the Radiant task operator image (~6 minutes)
+
+Inside the `radiant-portal-pipeline` directory, run the following command to build the Radiant task operator image:
+
+```
+eval $(minikube -p minikube docker-env)  # To ensure the image is built inside minikube's docker environment
+docker build -t ghcr.io/radiant-network/radiant-airflow-task-operator:latest -f Dockerfile.radiant.operator .
+```
+
+**Important note:** Ensure the image's name and tag matches with the `RADIANT_TASK_OPERATOR_IMAGE` from the `values/airflow-values.yaml` file.
 
 ## Install airflow volumes for logs and dags
 ```
@@ -282,3 +292,128 @@ You should be redirected to keycloak login page. Put the username and password y
 Then you should be able to see the case list page.
 
 If you click on Case 1 (Family trio) or case 8 (Solo), you should be able to click on Variants tab and see the variants for the case.
+
+## Using OpenFGA Authorization
+
+(Ignore this section if you don't want to be actively testing OpenFGA authorization)
+
+You can switch to OpenFGA for API authorization by setting the `RADIANT_AUTHORIZATION_PROVIDER` to `openfga` in the `k8s/api/deployment.yaml` file and then redeploying the API.
+
+```
+kubectl apply -f k8s/api/
+```
+
+### Install OpenFGA
+
+**Note**:
+This runs OpenFGA with in-memory datastore, which means all data will be lost when the pod is restarted.
+This is acceptable for testing and development purposes, but not for production use.
+
+```
+helm repo add openfga https://openfga.github.io/helm-charts
+helm install openfga openfga/openfga -f values/openfga-values.yaml
+```
+
+### Monitor OpenFGA pod is running (1 minutes)
+```
+kubectl get po | grep openfga
+```
+
+Results 1 pod running :
+
+```
+openfga-7c9f5c6b9b-5k5t4          1/1     Running     0          25s
+```
+
+### Setup KeyCloak for OpenFGA authorization
+
+To use OpenFGA authorization, you need to create the following in Keycloak:
+
+#### Create clients
+
+Click `Clients` 
+
+In General Settings, set the following: 
+- `Client type`: Leave `OpenID Connect`
+- `Client ID`: The name of your project (e.g., `CBTN`)
+- `Name`: The name of your project (e.g., `CBTN`)
+
+Click `Next`
+
+In Capability config, set the following:
+- `Client authentication`: `On`
+- `Authorization`: `Off`
+- `Authentication flow`: Uncheck everything
+
+Click `Next`, then click `Save`.
+
+#### Create roles
+
+Then, for that client, click on `Roles` tab, then click on `Create Role`.
+
+Create the following roles and save them:
+- `geneticist`
+- `requester`
+
+#### Assign roles to users
+
+Back to `Users` tab, select the user you created earlier (e.g., `user1`).
+Click on `Role Mappings` tab, then select the client you created earlier (e.g., `CBTN`) in the `Client Roles` dropdown.
+
+Once all the above is done, you should see the appropriate `resource_access` claim in your JWT token when you log in via Keycloak.
+(You can safely ignore `account`, since this is KeyCloak specific and not used in the API)
+
+```
+{
+  "exp": 1761764140,
+  "iat": 1761763840,
+  "jti": "onrtro:c5b8d4e4-f2d4-65eb-664b-a5268e7915b9",
+  "iss": "http://radiant-keycloak:8282/realms/Radiant",
+  "aud": [
+    "CBTN",
+    "account"
+  ],
+  "sub": "682bf9ff-d1c0-4417-bc68-657ed00de840",
+  "typ": "Bearer",
+  "azp": "radiant",
+  "sid": "af374f2a-ecc2-b16b-f3fe-492758cd5877",
+  "acr": "1",
+  "allowed-origins": [
+    "*"
+  ],
+  "realm_access": {
+    "roles": [
+      "offline_access",
+      "default-roles-radiant",
+      "uma_authorization"
+    ]
+  },
+  "resource_access": {
+    "CBTN": {
+      "roles": [
+        "requester",
+        "geneticist"
+      ]
+    },
+    "radiant": {
+      "roles": [
+        "radiant"
+      ]
+    },
+    "account": {
+      "roles": [
+        "manage-account",
+        "manage-account-links",
+        "view-profile"
+      ]
+    }
+  },
+  "scope": "profile email",
+  "email_verified": true,
+  "name": "User1 Test",
+  "preferred_username": "user1",
+  "given_name": "User1",
+  "family_name": "Test",
+  "email": "user1@email.me"
+}
+```
