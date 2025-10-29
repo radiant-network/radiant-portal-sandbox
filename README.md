@@ -142,28 +142,6 @@ Results 1 pod running :
 radiant-keycloak-b544d74bb-wk5zv         1/1     Running     0          53s
 ```
 
-## Install OpenFGA
-
-**Note**: 
-This runs OpenFGA with in-memory datastore, which means all data will be lost when the pod is restarted. 
-This is acceptable for testing and development purposes, but not for production use.
-
-```
-helm repo add openfga https://openfga.github.io/helm-charts
-helm install openfga openfga/openfga -f values/openfga-values.yaml
-```
-
-## Monitor OpenFGA pod is running (1 minutes)
-```
-kubectl get po | grep openfga
-```
-
-Results 1 pod running :
-
-```
-openfga-7c9f5c6b9b-5k5t4          1/1     Running     0          25s
-```
-
 ## Install API
 ```
 kubectl apply -f k8s/api/
@@ -325,6 +303,30 @@ You can switch to OpenFGA for API authorization by setting the `RADIANT_AUTHORIZ
 ```
 kubectl apply -f k8s/api/
 ```
+
+### Install OpenFGA
+
+**Note**:
+This runs OpenFGA with in-memory datastore, which means all data will be lost when the pod is restarted.
+This is acceptable for testing and development purposes, but not for production use.
+
+```
+helm repo add openfga https://openfga.github.io/helm-charts
+helm install openfga openfga/openfga -f values/openfga-values.yaml
+```
+
+### Monitor OpenFGA pod is running (1 minutes)
+```
+kubectl get po | grep openfga
+```
+
+Results 1 pod running :
+
+```
+openfga-7c9f5c6b9b-5k5t4          1/1     Running     0          25s
+```
+
+### Setup KeyCloak for OpenFGA authorization
 
 To use OpenFGA authorization, you need to create the following in Keycloak:
 
