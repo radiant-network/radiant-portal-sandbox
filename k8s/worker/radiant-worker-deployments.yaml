@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: radiant-worker
+  name: radiant-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: radiant-worker
+  template:
+    metadata:
+      labels:
+        app: radiant-worker
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/radiant-network/radiant-worker:latest
+          env:
+            - name: PGUSER
+              value: postgres
+            - name: PGPASSWORD
+              value: postgres
+            - name: PGHOST
+              value: postgres
+            - name: PGSSLMODE
+              value: disable
+            - name: PGPORT
+              value: "5432"
+            - name: PGDATABASE
+              value: radiant
+          args:
+            - "-stderrthreshold=INFO"
+            - "-logtostderr=true"
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: 9999
+            initialDelaySeconds: 300
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 9999
+            initialDelaySeconds: 30
+            timeoutSeconds: 1

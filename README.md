@@ -162,6 +162,20 @@ curl http://localhost:8090/status
 {"status":{"postgres":"up","starrocks":"up"}}%
 ```
 
+## Install Worker
+```
+kubectl apply -f k8s/worker/
+```
+
+## Monitor API pod is running (1 minutes)
+```
+kubectl get po | grep worker
+```
+Results 1 pod running :
+```
+radiant-worker-5c9bd9c9c5-775m5          1/1     Running     0          108s
+```
+
 ## Install the frontend
 ```
 kubectl apply -f k8s/ui/

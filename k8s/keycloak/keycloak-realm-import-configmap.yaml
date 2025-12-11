@@ -257,8 +257,8 @@ data:
                     "view-authorization",
                     "view-identity-providers",
                     "query-clients",
-                    "manage-users",
                     "impersonation",
+                    "manage-users",
                     "manage-identity-providers",
                     "view-users",
                     "create-client",
@@ -308,6 +308,17 @@ data:
           ],
           "security-admin-console": [],
           "admin-cli": [],
+          "radiant-cli": [
+            {
+              "id": "d5b80148-dcf4-4ac2-aec0-7db3de9d95ff",
+              "name": "data_manager",
+              "description": "",
+              "composite": false,
+              "clientRole": true,
+              "containerId": "bf9b01e7-8c7d-45ae-b3bc-e8eecf45f331",
+              "attributes": {}
+            }
+          ],
           "account-console": [],
           "broker": [
             {
@@ -321,6 +332,15 @@ data:
             }
           ],
           "radiant": [
+            {
+              "id": "40110644-ca8b-4db2-a167-75ec2aacfb13",
+              "name": "data_manager",
+              "description": "",
+              "composite": false,
+              "clientRole": true,
+              "containerId": "81635516-20ff-43f1-aba0-6dda1994350f",
+              "attributes": {}
+            },
             {
               "id": "ed06e4be-c7d7-4801-af3c-f89adfb25f69",
               "name": "radiant",
@@ -474,6 +494,33 @@ data:
       "webAuthnPolicyPasswordlessAvoidSameAuthenticatorRegister": false,
       "webAuthnPolicyPasswordlessAcceptableAaguids": [],
       "webAuthnPolicyPasswordlessExtraOrigins": [],
+      "users": [
+        {
+          "id": "4b14be22-2b89-488a-87a3-755b2ff81545",
+          "username": "service-account-radiant-cli",
+          "emailVerified": false,
+          "enabled": true,
+          "createdTimestamp": 1765478486066,
+          "totp": false,
+          "serviceAccountClientId": "radiant-cli",
+          "disableableCredentialTypes": [],
+          "requiredActions": [],
+          "realmRoles": [
+            "default-roles-radiant"
+          ],
+          "clientRoles": {
+            "radiant-cli": [
+              "data_manager"
+            ],
+            "radiant": [
+              "data_manager",
+              "radiant"
+            ]
+          },
+          "notBefore": 0,
+          "groups": []
+        }
+      ],
       "scopeMappings": [
         {
           "clientScope": "offline_access",
@@ -621,7 +668,8 @@ data:
           "protocol": "openid-connect",
           "attributes": {
             "realm_client": "false",
-            "client.use.lightweight.access.token.enabled": "true"
+            "client.use.lightweight.access.token.enabled": "true",
+            "post.logout.redirect.uris": "+"
           },
           "authenticationFlowBindingOverrides": {},
           "fullScopeAllowed": true,
@@ -663,7 +711,8 @@ data:
           "frontchannelLogout": false,
           "protocol": "openid-connect",
           "attributes": {
-            "realm_client": "true"
+            "realm_client": "true",
+            "post.logout.redirect.uris": "+"
           },
           "authenticationFlowBindingOverrides": {},
           "fullScopeAllowed": false,
@@ -696,7 +745,7 @@ data:
           "enabled": true,
           "alwaysDisplayInConsole": false,
           "clientAuthenticatorType": "client-secret",
-          "secret": "ShutThisIsASecret!",
+          "secret": "**********",
           "redirectUris": [
             "*"
           ],
@@ -719,6 +768,7 @@ data:
             "client.secret.creation.time": "1748881893",
             "backchannel.logout.session.required": "true",
             "standard.token.exchange.enabled": "false",
+            "post.logout.redirect.uris": "+",
             "oauth2.device.authorization.grant.enabled": "false",
             "backchannel.logout.revoke.offline.tokens": "false"
           },
@@ -727,6 +777,84 @@ data:
           "nodeReRegistrationTimeout": -1,
           "defaultClientScopes": [
             "web-origins",
+            "acr",
+            "roles",
+            "profile",
+            "basic",
+            "email"
+          ],
+          "optionalClientScopes": [
+            "address",
+            "phone",
+            "organization",
+            "offline_access",
+            "microprofile-jwt"
+          ]
+        },
+        {
+          "id": "bf9b01e7-8c7d-45ae-b3bc-e8eecf45f331",
+          "clientId": "radiant-cli",
+          "name": "",
+          "description": "",
+          "rootUrl": "",
+          "adminUrl": "",
+          "baseUrl": "",
+          "surrogateAuthRequired": false,
+          "enabled": true,
+          "alwaysDisplayInConsole": false,
+          "clientAuthenticatorType": "client-secret",
+          "secret": "**********",
+          "redirectUris": [
+            "/*"
+          ],
+          "webOrigins": [
+            "/*"
+          ],
+          "notBefore": 0,
+          "bearerOnly": false,
+          "consentRequired": false,
+          "standardFlowEnabled": true,
+          "implicitFlowEnabled": false,
+          "directAccessGrantsEnabled": false,
+          "serviceAccountsEnabled": true,
+          "publicClient": false,
+          "frontchannelLogout": true,
+          "protocol": "openid-connect",
+          "attributes": {
+            "request.object.signature.alg": "any",
+            "frontchannel.logout.session.required": "true",
+            "post.logout.redirect.uris": "+",
+            "oauth2.device.authorization.grant.enabled": "false",
+            "use.jwks.url": "false",
+            "backchannel.logout.revoke.offline.tokens": "false",
+            "use.refresh.tokens": "true",
+            "jwt.credential.certificate": "MIIEpTCCAo0CBgGbDrGO2jANBgkqhkiG9w0BAQsFADAWMRQwEgYDVQQDDAtyYWRpYW50LWNsaTAeFw0yNTEyMTExODMyNTZaFw0yODEyMTExODM0MzNaMBYxFDASBgNVBAMMC3JhZGlhbnQtY2xpMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAqHVW/svr5RwfXlN+qDMK30sEYYtQOhGakG8KBSmEirZJufEo9VrXU2/WxKR9GUXfovB0hNpOOrUpnU4exKw8mbR03ZYQnN7cO0+HpuXJfU8yKG5VrqeS0wMYj8nWWXkAoL14BsK/Ww/qxJiOE611n80eFVReDwz7Iom0l/vZR5VOsgd4rAJAelyJ4GOjo+MuqYt4pQtMFdm47kLF5I/ProhTMiVcgQKQ/qFH+Nrfu+UKkwoJ7gr7GZR1CJE79ZGgOC78ALSy5X4EFd4dy3JocriTeLhM/SE+J2OkozJ/OHAfbclZ6zCelIj0yxZy3K6O9f0FEIB9C+ZiSieG7MXfuOQFeLEjZ2UZAxnhuhKHcfc7A/hdFKsUTu5V2126wecVu1cSvmAghE+8Bo7Ujq9YSR5B3vmpcAPz4JEDybZ+Hw9Hbaody7tYY9GsyjNS8vjo22Hvcn0ooe6ZnOJivqrxAG2+T+6zPapctnuGpoVf3jc666NdM2/W7eUEptH/0+V3QIwWdgaiBhJPkFi6BDzky1ElmN98CJXiabdpaWYPXO5FR7+XJgNVc7oCvx5i8OMqSrsdP8wV37mr/dXYL17lQ73YnO/b0u4VXlvdtBRk6GgfJbQcprAUsC1VdkggcvP4LO3StWNf87KygtuLXFg6dhXxLMsmzK92+PX0DMD038ECAwEAATANBgkqhkiG9w0BAQsFAAOCAgEAli7rI/67xxIm8bWlJzjBDSHmT2WcVBCuG8rf8mi6P+siOOk42R3RNX2d6fTucIgn/7lqn8xk5rN6/unqHMb2Nehp8ywBK4tgKUAVo9uhjEIIP+9HBSgS/qaSTSNSq9ruobGW/HpRvhVj5jaCIwk4vLomTzQSEdfHIGKiD+Mol45VC/ZKST4hzAlYUFz1jXRPyON7OXtDx6w0LPruugSwz4EF3IFyTtKVHQU/ujAakog8oOD6c82/fjIhNnronvoaNfEOSyg3LltrvNImwSuWwuFvjXou2uXBHkDxcqq9rrpsrjJgcKbNOWz3wTV+fY7BghQdIEhx+T9n3wc539p/Tj2S2+D80ydGHliLDd/0sP2hRWwpobA9w+rCpJwg5lYKtobYpytjUnuepkSeFxeO/CpDI/lvsHZmxA5tGlImnpCB4sWRn/2sHjr9QAMrWOW6AhBNvHcsbR0Li+TeC/32OQWMBZDQ6ICUPTfdH+WInkBWI4CIRBIUcLtwL87v0RhMSGXymKpC2vnyat/SLUU47UP1Sc/FnulVexTEUzKlT73dEw33d9MD/cg/i2V1IfTkJLH2XLMoBdY2LJ+9yMYS/9ppk1iGTGlxdE/vYcTraG393m4hPGaLVgBg/v9hdpDBiZYi9vJ/ie9KpSa70gB0588XXIGDg7UifnhogtfiDME=",
+            "realm_client": "false",
+            "oidc.ciba.grant.enabled": "false",
+            "backchannel.logout.session.required": "true",
+            "client_credentials.use_refresh_token": "false",
+            "require.pushed.authorization.requests": "false",
+            "request.object.encryption.enc": "any",
+            "dpop.bound.access.tokens": "false",
+            "id.token.as.detached.signature": "false",
+            "client.secret.creation.time": "1765477922",
+            "request.object.encryption.alg": "any",
+            "client.introspection.response.allow.jwt.claim.enabled": "false",
+            "standard.token.exchange.enabled": "false",
+            "client.use.lightweight.access.token.enabled": "false",
+            "request.object.required": "not required",
+            "access.token.header.type.rfc9068": "false",
+            "acr.loa.map": "{}",
+            "tls.client.certificate.bound.access.tokens": "false",
+            "display.on.consent.screen": "false",
+            "token.response.type.bearer.lower-case": "false"
+          },
+          "authenticationFlowBindingOverrides": {},
+          "fullScopeAllowed": true,
+          "nodeReRegistrationTimeout": -1,
+          "defaultClientScopes": [
+            "web-origins",
+            "service_account",
             "acr",
             "roles",
             "profile",
@@ -762,7 +890,8 @@ data:
           "frontchannelLogout": false,
           "protocol": "openid-connect",
           "attributes": {
-            "realm_client": "true"
+            "realm_client": "true",
+            "post.logout.redirect.uris": "+"
           },
           "authenticationFlowBindingOverrides": {},
           "fullScopeAllowed": false,
@@ -920,12 +1049,13 @@ data:
               "protocolMapper": "oidc-organization-membership-mapper",
               "consentRequired": false,
               "config": {
-                "id.token.claim": "true",
                 "introspection.token.claim": "true",
+                "multivalued": "true",
+                "userinfo.token.claim": "true",
+                "id.token.claim": "true",
                 "access.token.claim": "true",
                 "claim.name": "organization",
-                "jsonType.label": "String",
-                "multivalued": "true"
+                "jsonType.label": "String"
               }
             }
           ]
@@ -1236,8 +1366,9 @@ data:
               "consentRequired": false,
               "config": {
                 "user.session.note": "clientHost",
-                "id.token.claim": "true",
                 "introspection.token.claim": "true",
+                "userinfo.token.claim": "true",
+                "id.token.claim": "true",
                 "access.token.claim": "true",
                 "claim.name": "clientHost",
                 "jsonType.label": "String"
@@ -1251,8 +1382,9 @@ data:
               "consentRequired": false,
               "config": {
                 "user.session.note": "clientAddress",
-                "id.token.claim": "true",
                 "introspection.token.claim": "true",
+                "userinfo.token.claim": "true",
+                "id.token.claim": "true",
                 "access.token.claim": "true",
                 "claim.name": "clientAddress",
                 "jsonType.label": "String"
@@ -1266,8 +1398,9 @@ data:
               "consentRequired": false,
               "config": {
                 "user.session.note": "client_id",
-                "id.token.claim": "true",
                 "introspection.token.claim": "true",
+                "userinfo.token.claim": "true",
+                "id.token.claim": "true",
                 "access.token.claim": "true",
                 "claim.name": "client_id",
                 "jsonType.label": "String"
@@ -1312,8 +1445,9 @@ data:
               "consentRequired": false,
               "config": {
                 "id.token.claim": "true",
+                "access.token.claim": "true",
                 "introspection.token.claim": "true",
-                "access.token.claim": "true"
+                "userinfo.token.claim": "true"
               }
             }
           ]
@@ -1378,8 +1512,9 @@ data:
               "consentRequired": false,
               "config": {
                 "user.session.note": "AUTH_TIME",
-                "id.token.claim": "true",
                 "introspection.token.claim": "true",
+                "userinfo.token.claim": "true",
+                "id.token.claim": "true",
                 "access.token.claim": "true",
                 "claim.name": "auth_time",
                 "jsonType.label": "long"
@@ -1462,6 +1597,7 @@ data:
               "config": {
                 "introspection.token.claim": "true",
                 "multivalued": "true",
+                "userinfo.token.claim": "true",
                 "user.attribute": "foo",
                 "id.token.claim": "true",
                 "access.token.claim": "true",
@@ -1603,14 +1739,14 @@ data:
             "subComponents": {},
             "config": {
               "allowed-protocol-mapper-types": [
-                "oidc-sha256-pairwise-sub-mapper",
-                "saml-role-list-mapper",
                 "oidc-usermodel-attribute-mapper",
-                "oidc-address-mapper",
-                "saml-user-property-mapper",
                 "saml-user-attribute-mapper",
+                "oidc-address-mapper",
+                "oidc-sha256-pairwise-sub-mapper",
+                "saml-user-property-mapper",
+                "oidc-full-name-mapper",
                 "oidc-usermodel-property-mapper",
-                "oidc-full-name-mapper"
+                "saml-role-list-mapper"
               ]
             }
           },
@@ -1665,14 +1801,14 @@ data:
             "subComponents": {},
             "config": {
               "allowed-protocol-mapper-types": [
-                "saml-user-property-mapper",
-                "saml-role-list-mapper",
-                "oidc-usermodel-attribute-mapper",
-                "oidc-full-name-mapper",
-                "oidc-sha256-pairwise-sub-mapper",
-                "oidc-usermodel-property-mapper",
                 "oidc-address-mapper",
-                "saml-user-attribute-mapper"
+                "oidc-usermodel-attribute-mapper",
+                "oidc-usermodel-property-mapper",
+                "saml-role-list-mapper",
+                "saml-user-attribute-mapper",
+                "oidc-full-name-mapper",
+                "saml-user-property-mapper",
+                "oidc-sha256-pairwise-sub-mapper"
               ]
             }
           }
@@ -1731,7 +1867,6 @@ data:
         ]
       },
       "internationalizationEnabled": false,
-      "supportedLocales": [],
       "authenticationFlows": [
         {
           "id": "7adb9f45-75e6-4e7f-88c6-976f9b3d55d5",
@@ -2446,6 +2581,15 @@ data:
           "config": {}
         },
         {
+          "alias": "idp_link",
+          "name": "Linking Identity Provider",
+          "providerId": "idp_link",
+          "enabled": true,
+          "defaultAction": false,
+          "priority": 120,
+          "config": {}
+        },
+        {
           "alias": "update_user_locale",
           "name": "Update User Locale",
           "providerId": "update_user_locale",
@@ -2467,8 +2611,8 @@ data:
         "cibaExpiresIn": "120",
         "cibaAuthRequestedUserHint": "login_hint",
         "oauth2DeviceCodeLifespan": "600",
-        "oauth2DevicePollingInterval": "5",
         "clientOfflineSessionMaxLifespan": "0",
+        "oauth2DevicePollingInterval": "5",
         "clientSessionIdleTimeout": "0",
         "parRequestUriLifespan": "60",
         "clientSessionMaxLifespan": "0",
@@ -2476,7 +2620,7 @@ data:
         "cibaInterval": "5",
         "realmReusableOtpCode": "false"
       },
-      "keycloakVersion": "26.2.5",
+      "keycloakVersion": "26.4.7",
       "userManagedAccessAllowed": false,
       "organizationsEnabled": false,
       "verifiableCredentialsEnabled": false,
