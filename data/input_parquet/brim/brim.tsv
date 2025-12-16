@@ -1,0 +1,11 @@
+Name	Scope	Patient_id	Document_id	Generated Value	Value	Raw Text	Reasoning	Review Status	Reviewed	Reviewing User	Reviewed At	Validation Value	Validation Agreement
+core_clinical_concepts.tumor_location	Many Labels Per Note	123	doc_123	Brain Stem- Medulla	Brain Stem- Medulla	Brain, left lateral medullary cistern and cerebellar peduncle			FALSE		--		
+core_clinical_concepts.tumor_location	Many Labels Per Note	123	doc_123	Cerebellum/Posterior Fossa	Cerebellum/Posterior Fossa	Brain, left lateral medullary cistern and cerebellar peduncle			FALSE		--		
+core_clinical_concepts.diagnosis	Many Labels Per Note	123	doc_123	Low-grade glioma/astrocytoma (WHO grade I/II)	Low-grade glioma/astrocytoma (WHO grade I/II)	Pilocytic astrocytoma, WHO Grade I			FALSE		--		
+braf_alteration_details.braf_alterations	Many Labels Per Note	123	doc_123	KIAA1549-BRAF Fusion	KIAA1549-BRAF Fusion	Fusion gene: KIAA1549 (NM_020910.2) - BRAF (NM_004333.4)			FALSE		--		
+braf_alteration_details.braf_alterations	Many Labels Per Note	123	doc_123	KIAA1549-BRAF Fusion	KIAA1549-BRAF Fusion	One Tier 1A fusion gene: KIAA1549 (NM_020910.2) - BRAF (NM_004333.4)			FALSE		--		
+core_clinical_concepts.surgery	One Label Per Note	123	doc_123	Yes	Yes	Specimen Type/Procedure:  Biopsy	The context mentions 'Biopsy', which is a surgical procedure. Therefore, it explicitly states that a surgical procedure has been performed.		FALSE		--		
+core_clinical_concepts.extent_of_tumor_resection	One Label Per Note	123	doc_123	Biopsy only	Biopsy only	Biopsy Specimen Handling: Squash/smear/touch preparation Frozen Permanent CBTTC Specimen Size:  See gross description Laterality: Left Tumor Site:  Lateral medulla and middle cerebellar peduncle	The context information indicates that the procedure performed was a biopsy, as evidenced by the text 'Biopsy Specimen Handling' and the absence of any mention of more extensive resection. The predicted label 'Biopsy only' aligns with this observation.		FALSE		--		
+braf_alteration_details.methyl_profiling_yn	One Label Per Patient	456		Unknown	Unknown				FALSE		--		
+braf_alteration_details.methyl_profiling_yn	One Label Per Patient	789		Unknown	Unknown				FALSE		--		
+braf_alteration_details.methyl_profiling_yn	One Label Per Patient	910		Unknown	Unknown				FALSE		--		
