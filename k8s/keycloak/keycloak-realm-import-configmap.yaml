@@ -745,7 +745,7 @@ data:
           "enabled": true,
           "alwaysDisplayInConsole": false,
           "clientAuthenticatorType": "client-secret",
-          "secret": "**********",
+          "secret": "This1sMyS3cr3t!",
           "redirectUris": [
             "*"
           ],
@@ -803,7 +803,7 @@ data:
           "enabled": true,
           "alwaysDisplayInConsole": false,
           "clientAuthenticatorType": "client-secret",
-          "secret": "**********",
+          "secret": "This1sMyS3cr3t!",
           "redirectUris": [
             "/*"
           ],

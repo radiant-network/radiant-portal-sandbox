@@ -24,7 +24,7 @@ spec:
               value: postgres
             - name: POSTGRES_USER
               value: postgres
-          image: postgres:13
+          image: postgres:14
           livenessProbe:
             exec:
               command:
