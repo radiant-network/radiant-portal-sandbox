@@ -31,6 +31,6 @@ spec:
         - name: KEYCLOAK_CLIENT
           value: radiant
         - name: KEYCLOAK_CLIENT_SECRET
-          value: "ShutThisIsASecret!"
+          value: "This1sMyS3cr3t!"
         - name: SESSION_SECRET
           value: secret
