@@ -18,6 +18,14 @@ spec:
         - name: worker
           image: ghcr.io/radiant-network/radiant-worker:latest
           env:
+            - name: AWS_ACCESS_KEY_ID
+              value: admin
+            - name: AWS_SECRET_ACCESS_KEY
+              value: password
+            - name: AWS_REGION
+              value: us-east-1
+            - name: AWS_ENDPOINT_URL
+              value: http://radiant-minio:9000
             - name: PGUSER
               value: postgres
             - name: PGPASSWORD
