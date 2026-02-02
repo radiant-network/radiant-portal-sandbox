@@ -1,0 +1,56 @@
+apiVersion: v1
+data:
+  copy_parquet.py: |-
+    from pyspark.sql import SparkSession
+
+    spark = SparkSession.builder.getOrCreate()
+    tables = ["clinvar", "1000_genomes", "gnomad_genomes_v3", 
+              "dbsnp", "dbnsfp", "spliceai_enriched", "topmed_bravo",
+              "cosmic_gene_set", "ddd_gene_set", "hpo_gene_set", "omim_gene_set", "orphanet_gene_set",
+              "gnomad_constraint_v_2_1_1", "hpo_term", "mondo_term", 
+              "ensembl_gene", "ensembl_transcript", "ensembl_exon_by_gene",
+              "gnomad_sv"
+              ]
+    for table in tables:
+        # Read Parquet files from MinIO
+        df = spark.read.parquet(f"s3a://warehouse/input_parquet/{table}/")
+        # Write to Iceberg table via REST catalog
+        df.writeTo(f"polaris.radiant.{table}").createOrReplace()
+
+  wait_for_init_catalog.sh: |-
+    #!/bin/sh
+    set -e
+
+    CLIENT_ID="root"
+    CLIENT_SECRET="polaris"
+    REALM="POLARIS"
+    CATALOG_NAME="polaris"
+    NAMESPACE="radiant"
+
+
+    # Wait for realm, catalog and namespace to exist
+    while true; do
+      TOKEN_RESPONSE=$(curl --fail-with-body -s -S -X POST http://radiant-polaris:8181/api/catalog/v1/oauth/tokens \
+        -H 'Content-Type: application/x-www-form-urlencoded' \
+        -d "grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}&scope=PRINCIPAL_ROLE:ALL" 2>&1) || {
+        echo "❌ Failed to obtain access token"
+        echo "$TOKEN_RESPONSE" >&2
+        continue;
+      }
+      echo "✅ Obtained access token"
+      TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"access_token":"[^"]*"' | sed 's/"access_token":"//;s/"//')
+      if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+        echo "❌ Failed to parse access token from response"
+        echo "$TOKEN_RESPONSE"
+        continue;
+      fi
+      echo "token: $TOKEN"
+      curl -X GET http://radiant-polaris:8181/api/catalog/v1/$CATALOG_NAME/namespaces \
+        -H "Authorization: Bearer $TOKEN" \
+        | grep "$NAMESPACE" && break
+      sleep 5
+    done
+kind: ConfigMap
+metadata:
+  name: radiant-polaris-init-tables-spark-script
+

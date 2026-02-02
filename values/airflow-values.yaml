@@ -59,13 +59,17 @@ extraEnv: |
   - name: AWS_ALLOW_HTTP
     value: "true"
   - name: PYICEBERG_CATALOG__DEFAULT__URI
-    value: "http://radiant-iceberg-rest:8181"
+    value: "http://radiant-polaris:8181/api/catalog"
   - name: PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT
     value: "http://radiant-minio:9000"
-  - name: PYICEBERG_CATALOG__DEFAULT__TOKEN
-    value: mysecret
+  - name: PYICEBERG_CATALOG__DEFAULT__WAREHOUSE
+    value: "polaris"
+  - name: PYICEBERG_CATALOG__DEFAULT__CREDENTIAL
+    value: "root:polaris"
+  - name: PYICEBERG_CATALOG__DEFAULT__SCOPE
+    value: "PRINCIPAL_ROLE:ALL"
   - name: RADIANT_ICEBERG_NAMESPACE
-    value: radiant
+    value: "radiant"
   - name: AIRFLOW_CONN_STARROCKS_CONN
     value: "mysql://root@radiant-starrocks-fe:9030/radiant"  
   - name: AIRFLOW_CONN_RADIANT_POSTGRES_CONN

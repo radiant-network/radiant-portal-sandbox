@@ -1,0 +1,26 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: radiant-polaris-init-catalog
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: polaris-admin-tool
+          image: apache/polaris-admin-tool:1.3.0-incubating
+          env:
+            - name: QUARKUS_DATASOURCE_USERNAME
+              value: "postgres"
+            - name: QUARKUS_DATASOURCE_PASSWORD
+              value: "postgres"
+            - name: QUARKUS_DATASOURCE_JDBC_URL
+              value: "jdbc:postgresql://postgres:5432/polaris_catalog"
+          command: ["/bin/sh", "/init/polaris-init.sh"]
+          volumeMounts:
+            - name: init-script
+              mountPath: /init
+      volumes:
+        - name: init-script
+          configMap:
+            name: radiant-polaris-init-catalog-script
