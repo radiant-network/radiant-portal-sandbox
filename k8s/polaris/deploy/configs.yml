@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: radiant-polaris
+  labels:
+    name: radiant-polaris
+data:
+  application.properties: |-
+    polaris.authentication.token-broker.max-token-generation=PT1H
+    polaris.authentication.token-broker.type=symmetric-key
+    polaris.features."ALLOW_SETTING_S3_ENDPOINTS"=true
+    polaris.features."SUPPORTED_CATALOG_STORAGE_TYPES"=["S3"]
+    polaris.persistence.type=relational-jdbc
+    polaris.realm-context.realms=radiant

@@ -10,12 +10,25 @@ spec:
         - name: polaris-admin-tool
           image: apache/polaris-admin-tool:1.3.0-incubating
           env:
+            # Necessary for boostrapping the realm
             - name: QUARKUS_DATASOURCE_USERNAME
               value: "postgres"
             - name: QUARKUS_DATASOURCE_PASSWORD
               value: "postgres"
             - name: QUARKUS_DATASOURCE_JDBC_URL
               value: "jdbc:postgresql://postgres:5432/polaris_catalog"
+            
+            # Script parameters
+            - name: CLIENT_ID
+              value: "root"
+            - name: CLIENT_SECRET
+              value: "polaris"
+            - name: REALM
+              value: "radiant"
+            - name: CATALOG_NAME
+              value: "polaris"
+            - name: NAMESPACE
+              value: "radiant"
           command: ["/bin/sh", "/init/polaris-init.sh"]
           volumeMounts:
             - name: init-script

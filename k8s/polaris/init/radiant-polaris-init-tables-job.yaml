@@ -16,6 +16,19 @@ spec:
             - name: radiant-polaris-init-tables-spark-script
               mountPath: /app
               readOnly: true
+  
+          # Script parameters
+          env:
+            - name: CLIENT_ID
+              value: "root"
+            - name: CLIENT_SECRET
+              value: "polaris"
+            - name: REALM
+              value: "radiant"
+            - name: CATALOG_NAME
+              value: "polaris"
+            - name: NAMESPACE
+              value: "radiant"
 
       containers:
         - name: spark
@@ -61,7 +74,7 @@ spec:
             - --conf
             - spark.sql.catalog.polaris.warehouse=polaris
             - --conf
-            - spark.sql.catalog.polaris.header.Polaris-Realm=POLARIS
+            - spark.sql.catalog.polaris.header.Polaris-Realm=radiant
             - --conf
             - spark.sql.catalog.polaris.credential=root:polaris
             - --conf

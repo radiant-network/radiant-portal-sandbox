@@ -75,16 +75,9 @@ postgres-init-job-fhtgf               0/1     Completed   0          23s
 ```
 
 ## Install polaris
-
-Create secrets:
 ```
-kubectl apply -f k8s/polaris/secret
+kubectl apply -f k8s/polaris/deploy
 ```
-
-helm repo add polaris https://downloads.apache.org/incubator/polaris/helm-chart
-helm repo update
-
-helm install polaris polaris/polaris  --version 1.3.0-incubating --devel -f values/polaris-values.yaml
 
 ## Monitor polaris pod is running (1 minute)
 ```

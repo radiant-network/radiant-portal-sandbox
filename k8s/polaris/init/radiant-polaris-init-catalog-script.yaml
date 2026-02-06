@@ -7,91 +7,125 @@ data:
     #!/bin/sh
     set -e
 
-    CLIENT_ID="root"
-    CLIENT_SECRET="polaris"
-    REALM="POLARIS"
-    CATALOG_NAME="polaris"
-    NAMESPACE="radiant"
-
-    java -jar /deployments/polaris-admin-tool.jar bootstrap -r "$REALM" -c "$REALM,$CLIENT_ID,$CLIENT_SECRET" -p
-
-    
-    TOKEN_RESPONSE=$(curl --fail-with-body -s -S -X POST http://radiant-polaris:8181/api/catalog/v1/oauth/tokens \
-      -H 'Content-Type: application/x-www-form-urlencoded' \
-      -d "grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}&scope=PRINCIPAL_ROLE:ALL" 2>&1) || {
-      echo "❌ Failed to obtain access token"
-      echo "$TOKEN_RESPONSE" >&2
-      exit 1
+    polaris_api() {
+      local method="$1"
+      local endpoint="$2"
+      local token="$3"
+      local payload="$4"
+      if [ -n "$payload" ]; then
+        curl --fail-with-body -s -S -X "$method" "http://radiant-polaris:8181/$endpoint" \
+          -H "Authorization: Bearer $token" \
+          -H "Polaris-Realm: $REALM" \
+          -H "Accept: application/json" \
+          -H "Content-Type: application/json" \
+          -d "$payload"
+      else
+        curl -s -X "$method" "http://radiant-polaris:8181/$endpoint" \
+          -H "Authorization: Bearer $token" \
+          -H "Polaris-Realm: $REALM" \
+          -H "Accept: application/json"
+      fi
     }
 
-    TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"access_token":"[^"]*"' | sed 's/"access_token":"//;s/"//')
-    if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
-      echo "❌ Failed to parse access token from response"
-      echo "$TOKEN_RESPONSE"
-      exit 1
-    fi
-    echo "✅ Obtained access token"
- 
-    echo "Creating catalog '$CATALOG_NAME' in realm $REALM..."
-    PAYLOAD='{
-      "catalog": {
-        "name": "'$CATALOG_NAME'",
-        "type": "INTERNAL",
-        "readOnly": false,
-        "properties": {
-          "default-base-location": "s3://warehouse/"
-        },
-        "storageConfigInfo": {
-          "storageType": "S3",
-          "allowedLocations": ["s3://warehouse/"],
-          "endpoint": "http://radiant-minio:9000",
-          "pathStyleAccess": true
+
+    create_realm_if_not_exists() {
+      local output=$(java -jar /deployments/polaris-admin-tool.jar bootstrap -r "$REALM" -c "$REALM,$CLIENT_ID,$CLIENT_SECRET" -p 2>&1) || {
+      echo "$output" | grep -q "It appears this metastore manager has already been bootstrapped." && \
+        echo "Realm already bootstrapped, continuing..." || {
+          echo "❌ Unexpected error during bootstrap"
+          echo "$output"
+          exit 1
         }
       }
-    }'
-
-    RESPONSE=$(curl --fail-with-body -s -S -X POST http://radiant-polaris:8181/api/management/v1/catalogs \
-      -H "Authorization: Bearer $TOKEN" \
-      -H "Accept: application/json" \
-      -H "Content-Type: application/json" \
-      -H "Polaris-Realm: $REALM" \
-      -d "$PAYLOAD" 2>&1) && echo -n "" || {
-      echo "❌ Failed to create catalog"
-      echo "$RESPONSE" >&2
-      exit 1
     }
-    echo "✅ Catalog created"
 
 
-    echo "Granting CATALOG_MANAGE_CONTENT privilege..."
-    RESPONSE=$(curl --fail-with-body -s -S -X PUT http://radiant-polaris:8181/api/management/v1/catalogs/$CATALOG_NAME/catalog-roles/catalog_admin/grants \
-      -H "Authorization: Bearer $TOKEN" \
-      -H "Polaris-Realm: $REALM" \
-      -H "Content-Type: application/json" \
-      -d '{"type": "catalog", "privilege": "CATALOG_MANAGE_CONTENT"}' 2>&1) && echo -n "" || {
-      echo "❌ Failed to grant privileges"
-      echo "$RESPONSE" >&2
-      exit 1
+    fetch_token() {
+      local token_response=$(curl --fail-with-body -s -S -X POST http://radiant-polaris:8181/api/catalog/v1/oauth/tokens \
+        -H 'Content-Type: application/x-www-form-urlencoded' \
+        -d "grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}&scope=PRINCIPAL_ROLE:ALL" 2>&1) || {
+        echo "❌ Failed to obtain access token"
+        echo "$token_response" >&2
+        exit 1
+      }
+
+
+      local token=$(echo "$token_response" | grep -o '"access_token":"[^"]*"' | sed 's/"access_token":"//;s/"//')
+      if [ -z "$token" ] || [ "$token" = "null" ]; then
+        echo "❌ Failed to parse access token from response"
+        echo "$token_response"
+        exit 1
+      fi
+      echo "$token"
     }
-    echo "✅ Privileges granted"
 
 
+    create_catalog_if_not_exists() {
+      local token="$1"
+      local payload='{
+        "catalog": {
+          "name": "'$CATALOG_NAME'",
+          "type": "INTERNAL",
+          "readOnly": false,
+          "properties": {
+            "default-base-location": "s3://warehouse/"
+          },
+          "storageConfigInfo": {
+            "storageType": "S3",
+            "allowedLocations": ["s3://warehouse/"],
+            "endpoint": "http://radiant-minio:9000",
+            "pathStyleAccess": true
+          }
+        }
+      }'
+      local catalogs
+      catalogs=$(polaris_api GET "api/management/v1/catalogs" "$token")
+      echo "$catalogs" | grep -q "$CATALOG_NAME" && \
+        echo "The catalog '$CATALOG_NAME' already exists, skipping creation." || {
+          polaris_api POST "api/management/v1/catalogs" "$token" "$payload"
+          echo "✅ Catalog created"
+        }
+    }    
 
-    echo "Creating namespace $NAMESPACE in catalog $CATALOG_NAME..."
-    NAMESPACE_PAYLOAD='{
-      "namespace": ["'$NAMESPACE'"],
-      "properties": {}
-    }'
-    RESPONSE=$(curl --fail-with-body -s -S -X POST http://radiant-polaris:8181/api/catalog/v1/$CATALOG_NAME/namespaces \
-      -H "Authorization: Bearer $TOKEN" \
-      -H "Accept: application/json" \
-      -H "Content-Type: application/json" \
-      -H "Polaris-Realm: $REALM" \
-      -d "$NAMESPACE_PAYLOAD" 2>&1) && echo -n "" || {
-      echo "❌ Failed to create namespace"
-      echo "$RESPONSE" >&2
-      exit 1
+
+    grant_privileges_if_not_exists() {
+      local token="$1"
+      local payload='{"type": "catalog", "privilege": "CATALOG_MANAGE_CONTENT"}'
+      local grants
+      grants=$(polaris_api GET "api/management/v1/catalogs/$CATALOG_NAME/catalog-roles/catalog_admin/grants" "$token")
+      echo "$grants" | grep -q "CATALOG_MANAGE_CONTENT" && \
+        echo "The catalog_admin role already has the CATALOG_MANAGE_CONTENT privilege on catalog '$CATALOG_NAME', skipping grant." || {
+          polaris_api PUT "api/management/v1/catalogs/$CATALOG_NAME/catalog-roles/catalog_admin/grants" "$token" "$payload"
+          echo "✅ Granted CATALOG_MANAGE_CONTENT privilege to catalog_admin role on catalog '$CATALOG_NAME'"
+        }
     }
-    echo "✅ Namespace created"
 
-    curl -X GET http://radiant-polaris:8181/api/catalog/v1/$CATALOG_NAME/namespaces -H "Authorization: Bearer $TOKEN"
+
+    create_namespace_if_not_exists() {
+      local token="$1"
+      local payload='{
+        "namespace": ["'$NAMESPACE'"],
+        "properties": {}
+      }'
+      local namespaces
+      namespaces=$(polaris_api GET "api/catalog/v1/$CATALOG_NAME/namespaces" "$token")
+      echo "$namespaces" | grep -q "$NAMESPACE" && \
+        echo "The namespace '$NAMESPACE' already exists in catalog '$CATALOG_NAME', skipping creation." || {
+          polaris_api POST "api/catalog/v1/$CATALOG_NAME/namespaces" "$token" "$payload"
+          echo "✅ Namespace created"
+        }
+    }
+    
+    main() {
+      echo "create realm if not exists"
+      create_realm_if_not_exists
+      
+      echo "fetch token"
+      local token="$(fetch_token)"
+      
+      create_catalog_if_not_exists "$token"
+      grant_privileges_if_not_exists "$token"
+      create_namespace_if_not_exists "$token"
+    }
+
+    main

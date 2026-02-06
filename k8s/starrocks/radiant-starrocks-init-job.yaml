@@ -49,6 +49,7 @@ spec:
                 'iceberg.catalog.security'='oauth2',
                 'iceberg.catalog.oauth2.credential'='root:polaris',
                 'iceberg.catalog.oauth2.scope'='PRINCIPAL_ROLE:ALL',
+                'iceberg.catalog.placement'='radiant',
                 'aws.s3.region'='us-east-1',
                 'aws.s3.access_key'='admin',
                 'aws.s3.secret_key'='password',

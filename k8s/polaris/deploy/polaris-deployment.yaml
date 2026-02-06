@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: radiant-polaris
+  labels:
+    app: radiant-polaris
+spec:
+  selector:
+    matchLabels:
+      app: radiant-polaris
+  template:
+    metadata:
+      labels:
+        app: radiant-polaris
+    spec:
+      volumes:
+        - name: config-volume
+          projected:
+            sources:
+              - configMap:
+                  name: radiant-polaris
+                  items:
+                    - key: application.properties
+                      path: application.properties
+      containers:
+        - name: polaris
+          image: apache/polaris:1.3.0-incubating
+          ports:
+            - containerPort: 8181
+              name: polaris-http
+              protocol: TCP
+            - containerPort: 8182
+              name: polaris-mgmt
+              protocol: TCP
+          env:
+            - name: QUARKUS_DATASOURCE_USERNAME
+              value: postgres
+            - name: QUARKUS_DATASOURCE_PASSWORD
+              value: postgres
+            - name: QUARKUS_DATASOURCE_JDBC_URL
+              value: jdbc:postgresql://postgres:5432/polaris_catalog
+            - name: AWS_REGION
+              value: us-east-1
+            - name: AWS_ACCESS_KEY_ID
+              value: admin
+            - name: AWS_SECRET_ACCESS_KEY
+              value: password
+            - name: AWS_ENDPOINT_URL
+              value: http://radiant-minio:9000
+            - name: AWS_ALLOW_HTTP
+              value: "true"
+            - name: polaris.authentication.token-broker.symmetric-key.secret
+              value: "polaris"
+          volumeMounts:
+            - mountPath: /deployments/config
+              name: config-volume
+              readOnly: true
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /q/health/live
+              port: polaris-mgmt
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 10
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /q/health/ready
+              port: polaris-mgmt
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 10

@@ -21,13 +21,6 @@ data:
     #!/bin/sh
     set -e
 
-    CLIENT_ID="root"
-    CLIENT_SECRET="polaris"
-    REALM="POLARIS"
-    CATALOG_NAME="polaris"
-    NAMESPACE="radiant"
-
-
     # Wait for realm, catalog and namespace to exist
     while true; do
       TOKEN_RESPONSE=$(curl --fail-with-body -s -S -X POST http://radiant-polaris:8181/api/catalog/v1/oauth/tokens \
