@@ -25,7 +25,7 @@ data:
     while true; do
       TOKEN_RESPONSE=$(curl --fail-with-body -s -S -X POST http://radiant-polaris:8181/api/catalog/v1/oauth/tokens \
         -H 'Content-Type: application/x-www-form-urlencoded' \
-        -d "grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}&scope=PRINCIPAL_ROLE:ALL" 2>&1) || {
+        -d "grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}&scope=PRINCIPAL_ROLE:CATALOG_MANAGE_CONTENT" 2>&1) || {
         echo "❌ Failed to obtain access token"
         echo "$TOKEN_RESPONSE" >&2
         continue;

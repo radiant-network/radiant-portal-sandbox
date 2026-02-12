@@ -27,6 +27,12 @@ spec:
               value: "radiant"
             - name: CATALOG_NAME
               value: "polaris"
+            - name: CATALOG_ENDPOINT
+              value: "http://radiant-minio:9000"
+            - name: CATALOG_WAREHOUSE
+              value: "s3://warehouse/"
+            - name: POLARIS_SERVICE_HOST
+              value: "radiant-polaris:8181"
             - name: NAMESPACE
               value: "radiant"
           command: ["/bin/sh", "/init/polaris-init.sh"]

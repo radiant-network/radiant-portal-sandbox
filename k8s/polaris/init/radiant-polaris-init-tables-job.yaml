@@ -78,7 +78,7 @@ spec:
             - --conf
             - spark.sql.catalog.polaris.credential=root:polaris
             - --conf
-            - spark.sql.catalog.polaris.scope=PRINCIPAL_ROLE:ALL
+            - spark.sql.catalog.polaris.scope=PRINCIPAL_ROLE:CATALOG_MANAGE_CONTENT
             - --conf
             - spark.sql.catalog.polaris.io-impl=org.apache.iceberg.aws.s3.S3FileIO
             - --conf
