@@ -45,6 +45,7 @@ data:
     port: 5432
     db: airflow
 
+
 extraEnv: |
   - name: PYTHONPATH
     value: /opt/airflow/dags
@@ -65,15 +66,19 @@ extraEnv: |
   - name: PYICEBERG_CATALOG__DEFAULT__WAREHOUSE
     value: "polaris"
   - name: PYICEBERG_CATALOG__DEFAULT__CREDENTIAL
-    value: "root:polaris"
+    value: "root:password"
   - name: PYICEBERG_CATALOG__DEFAULT__SCOPE
     value: "PRINCIPAL_ROLE:CATALOG_MANAGE_CONTENT"
   - name: PYICEBERG_CATALOG__DEFAULT__HEADER__Polaris-Realm
-    value: "radiant"  
+    value: "radiant"
+  - name: PYICEBERG_CATALOG__DEFAULT__HEADER__X-Iceberg-Access-Delegation
+    value: ""
+  - name: PYICEBERG_CATALOG__DEFAULT__OAUTH2_SERVER_URI
+    value: "http://radiant-polaris:8181/api/catalog/v1/oauth/tokens"
   - name: RADIANT_ICEBERG_NAMESPACE
     value: "radiant"
   - name: AIRFLOW_CONN_STARROCKS_CONN
-    value: "mysql://root@radiant-starrocks-fe:9030/radiant"  
+    value: "mysql://root@radiant-starrocks-fe:9030/radiant"
   - name: AIRFLOW_CONN_RADIANT_POSTGRES_CONN
     value: "postgresql://postgres:postgres@postgres:5432/radiant"
   - name: RADIANT_TASK_OPERATOR_KUBERNETES_NAMESPACE

@@ -22,7 +22,7 @@ spec:
             - name: CLIENT_ID
               value: "root"
             - name: CLIENT_SECRET
-              value: "polaris"
+              value: "password"
             - name: REALM
               value: "radiant"
             - name: CATALOG_NAME
@@ -41,16 +41,6 @@ spec:
             - spark.driver.extraJavaOptions=-Divy.cache.dir=/tmp -Divy.home=/tmp
             - --conf
             - spark.executor.extraJavaOptions=-Divy.cache.dir=/tmp -Divy.home=/tmp
-            - --conf
-            - spark.hadoop.fs.s3a.endpoint=http://radiant-minio:9000
-            - --conf
-            - spark.hadoop.fs.s3a.path.style.access=true
-            - --conf
-            - spark.hadoop.fs.s3a.access.key=admin
-            - --conf
-            - spark.hadoop.fs.s3a.secret.key=password
-            - --conf
-            - spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
             - --conf
             - spark.hadoop.fs.s3a.endpoint=http://radiant-minio:9000
             - --conf
@@ -76,7 +66,7 @@ spec:
             - --conf
             - spark.sql.catalog.polaris.header.Polaris-Realm=radiant
             - --conf
-            - spark.sql.catalog.polaris.credential=root:polaris
+            - spark.sql.catalog.polaris.credential=root:password
             - --conf
             - spark.sql.catalog.polaris.scope=PRINCIPAL_ROLE:CATALOG_MANAGE_CONTENT
             - --conf

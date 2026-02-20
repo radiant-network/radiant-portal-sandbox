@@ -91,7 +91,8 @@ data:
             \"storageType\": \"S3\",
             \"allowedLocations\": [\"$catalog_warehouse\"],
             \"endpoint\": \"$catalog_endpoint\",
-            \"pathStyleAccess\": true
+            \"pathStyleAccess\": true,
+            \"stsUnavailable\": true
           }
         }
       }"

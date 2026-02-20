@@ -16,13 +16,13 @@ spec:
             - name: QUARKUS_DATASOURCE_PASSWORD
               value: "postgres"
             - name: QUARKUS_DATASOURCE_JDBC_URL
-              value: "jdbc:postgresql://postgres:5432/polaris_catalog"
+              value: "jdbc:postgresql://postgres:5432/polaris"
             
             # Script parameters
             - name: CLIENT_ID
               value: "root"
             - name: CLIENT_SECRET
-              value: "polaris"
+              value: "password"
             - name: REALM
               value: "radiant"
             - name: CATALOG_NAME
@@ -30,7 +30,7 @@ spec:
             - name: CATALOG_ENDPOINT
               value: "http://radiant-minio:9000"
             - name: CATALOG_WAREHOUSE
-              value: "s3://warehouse/"
+              value: "s3://warehouse/polaris"
             - name: POLARIS_SERVICE_HOST
               value: "radiant-polaris:8181"
             - name: NAMESPACE

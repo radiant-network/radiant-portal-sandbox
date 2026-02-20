@@ -39,7 +39,9 @@ spec:
             - name: QUARKUS_DATASOURCE_PASSWORD
               value: postgres
             - name: QUARKUS_DATASOURCE_JDBC_URL
-              value: jdbc:postgresql://postgres:5432/polaris_catalog
+              value: jdbc:postgresql://postgres:5432/polaris
+            - name: QUARKUS_LOG_LEVEL
+              value: INFO
             - name: AWS_REGION
               value: us-east-1
             - name: AWS_ACCESS_KEY_ID
@@ -48,8 +50,8 @@ spec:
               value: password
             - name: AWS_ENDPOINT_URL
               value: http://radiant-minio:9000
-            - name: polaris.authentication.token-broker.symmetric-key.secret
-              value: "polaris"
+            - name: POLARIS_AUTHENTICATION_TOKEN_BROKER_SYMMETRIC_KEY_SECRET
+              value: "password"
           volumeMounts:
             - mountPath: /deployments/config
               name: config-volume
