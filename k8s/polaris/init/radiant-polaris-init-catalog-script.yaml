@@ -1,0 +1,167 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: radiant-polaris-init-catalog-script
+data:
+  polaris-init.sh: |
+    #!/bin/sh
+    set -e
+
+    polaris_api() {
+      local method="$1"
+      local endpoint="$2"
+      local token="$3"
+      local payload="$4"
+      local url="http://$POLARIS_SERVICE_HOST/$endpoint"
+      if [ -n "$payload" ]; then
+        output=$(curl --fail-with-body -s -S -X "$method" "$url" \
+          -H "Authorization: Bearer $token" \
+          -H "Polaris-Realm: $REALM" \
+          -H "Accept: application/json" \
+          -H "Content-Type: application/json" \
+          -d "$payload"
+        )
+        if [ $? -ne 0 ]; then
+          echo "❌ API request failed for method '"$method"' and url '$url' with payload '$payload'"
+          echo "$output"
+          exit 1
+        fi
+      else
+        curl -s -X "$method" "$url" \
+          -H "Authorization: Bearer $token" \
+          -H "Polaris-Realm: $REALM" \
+          -H "Accept: application/json"
+      fi
+    }
+
+
+    create_realm_if_not_exists() {
+      local realm="$1"
+      local client_id="$2"
+      local client_secret="$3"
+
+      local output=$(java -jar /deployments/polaris-admin-tool.jar bootstrap -r "$realm" -c "$realm,$client_id,$client_secret" -p 2>&1)
+      local status=$?
+      if [ $status -ne 0 ]; then
+        if echo "$output" | grep -q "It appears this metastore manager has already been bootstrapped"; then
+          echo "Realm already bootstrapped for realm ${realm} continuing..."
+        else
+          echo "❌ Unexpected error during bootstrap"
+          echo "$output"
+          exit 1
+        fi
+      fi
+    }
+
+
+    fetch_token() {
+      local client_id="$1"
+      local client_secret="$2"
+      local token_response=$(curl --fail-with-body -s -S -X POST "http://$POLARIS_SERVICE_HOST/api/catalog/v1/oauth/tokens" \
+        -H 'Content-Type: application/x-www-form-urlencoded' \
+        -d "grant_type=client_credentials&client_id=${client_id}&client_secret=${client_secret}&scope=PRINCIPAL_ROLE:ALL" 2>&1) || {
+        echo "❌ Failed to obtain access token"
+        echo "$token_response" >&2
+        exit 1
+      }
+
+      local token=$(echo "$token_response" | grep -o '"access_token":"[^"]*"' | sed 's/"access_token":"//;s/"//')
+      if [ -z "$token" ] || [ "$token" = "null" ]; then
+        echo "❌ Failed to parse access token from response: $token_response"
+        exit 1
+      fi
+      echo "$token"
+    }
+
+
+    create_catalog_if_not_exists() {
+      local token="$1"
+      local catalog_name="$2"
+      local catalog_endpoint="$3"
+      local catalog_warehouse="$4"
+      local payload="{
+        \"catalog\": {
+          \"name\": \"${catalog_name}\",
+          \"type\": \"INTERNAL\",
+          \"readOnly\": false,
+          \"properties\": {
+            \"default-base-location\": \"$catalog_warehouse\"
+          },
+          \"storageConfigInfo\": {
+            \"storageType\": \"S3\",
+            \"allowedLocations\": [\"$catalog_warehouse\"],
+            \"endpoint\": \"$catalog_endpoint\",
+            \"pathStyleAccess\": true,
+            \"stsUnavailable\": true
+          }
+        }
+      }"
+      local catalogs
+      catalogs=$(polaris_api GET "api/management/v1/catalogs" "$token")
+      if echo "$catalogs" | grep -q "$catalog_name"; then
+        echo "The catalog '$catalog_name' already exists, skipping creation."
+      else
+          polaris_api POST "api/management/v1/catalogs" "$token" "$payload"
+          echo "✅ Catalog created"
+      fi
+    }    
+
+
+    create_namespace_if_not_exists() {
+      local token="$1"
+      local catalog_name="$2"
+      local namespace="$3"
+
+      local payload="{
+        \"namespace\": [\"$namespace\"],
+        \"properties\": {}
+      }"
+      local namespaces
+      namespaces=$(polaris_api GET "api/catalog/v1/$catalog_name/namespaces" "$token")
+      if echo "$namespaces" | grep -q "$namespace"; then
+        echo "The namespace '$namespace' already exists in catalog '$catalog_name', skipping creation."
+      else
+        polaris_api POST "api/catalog/v1/$catalog_name/namespaces" "$token" "$payload"
+        echo "✅ Namespace created"
+      fi
+    }
+
+
+    grant_privilege_if_not_exists() {
+      local token="$1"
+      local catalog_name="$2"
+      local role_name="$3"
+      local privilege="$4"
+
+      local payload="{\"type\": \"catalog\", \"privilege\": \"$privilege\"}"
+      local grants
+      grants=$(polaris_api GET "api/management/v1/catalogs/$catalog_name/catalog-roles/$role_name/grants" "$token")
+      if echo "$grants" | grep -q "$privilege"; then
+        echo "The '"$role_name"' role already has the '$privilege' privilege on catalog '$catalog_name', skipping grant."
+      else
+        polaris_api PUT "api/management/v1/catalogs/$catalog_name/catalog-roles/$role_name/grants" "$token" "$payload"
+        echo "✅ Granted '$privilege' privilege to '"$role_name"' role on catalog '$catalog_name'"
+      fi
+    }
+
+
+    main() {
+      echo "create realm if not exists"
+      create_realm_if_not_exists "$REALM" "$CLIENT_ID" "$CLIENT_SECRET"
+
+      local token="$(fetch_token "$CLIENT_ID" "$CLIENT_SECRET")"
+      status=$?
+      if [ $status -ne 0 ] || [ -z "$token" ]; then
+        echo "❌ Failed to obtain access token"
+        echo "$token"
+        exit 1
+      fi
+      echo "✅ Obtained access token"
+      
+      create_catalog_if_not_exists "$token" "$CATALOG_NAME" "$CATALOG_ENDPOINT" "$CATALOG_WAREHOUSE"
+      grant_privilege_if_not_exists "$token" "$CATALOG_NAME" "catalog_admin" "CATALOG_MANAGE_CONTENT"
+      create_namespace_if_not_exists "$token" "$CATALOG_NAME" "$NAMESPACE"
+  
+    }
+
+    main

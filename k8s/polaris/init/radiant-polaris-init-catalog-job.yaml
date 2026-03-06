@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: radiant-polaris-init-catalog
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: polaris-admin-tool
+          image: apache/polaris-admin-tool:1.3.0-incubating
+          env:
+            # Necessary for boostrapping the realm
+            - name: QUARKUS_DATASOURCE_USERNAME
+              value: "postgres"
+            - name: QUARKUS_DATASOURCE_PASSWORD
+              value: "postgres"
+            - name: QUARKUS_DATASOURCE_JDBC_URL
+              value: "jdbc:postgresql://postgres:5432/polaris"
+            
+            # Script parameters
+            - name: CLIENT_ID
+              value: "root"
+            - name: CLIENT_SECRET
+              value: "password"
+            - name: REALM
+              value: "radiant"
+            - name: CATALOG_NAME
+              value: "polaris"
+            - name: CATALOG_ENDPOINT
+              value: "http://radiant-minio:9000"
+            - name: CATALOG_WAREHOUSE
+              value: "s3://warehouse/polaris"
+            - name: POLARIS_SERVICE_HOST
+              value: "radiant-polaris:8181"
+            - name: NAMESPACE
+              value: "radiant"
+          command: ["/bin/sh", "/init/polaris-init.sh"]
+          volumeMounts:
+            - name: init-script
+              mountPath: /init
+      volumes:
+        - name: init-script
+          configMap:
+            name: radiant-polaris-init-catalog-script

@@ -1,0 +1,96 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: radiant-polaris-init-tables-job
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: wait-for-init-catalog-job
+          image: bitnami/kubectl:latest
+          command:
+            - "/bin/sh"
+            - /app/wait_for_init_catalog.sh
+          volumeMounts:
+            - name: radiant-polaris-init-tables-spark-script
+              mountPath: /app
+              readOnly: true
+  
+          # Script parameters
+          env:
+            - name: CLIENT_ID
+              value: "root"
+            - name: CLIENT_SECRET
+              value: "password"
+            - name: REALM
+              value: "radiant"
+            - name: CATALOG_NAME
+              value: "polaris"
+            - name: NAMESPACE
+              value: "radiant"
+
+      containers:
+        - name: spark
+          image: apache/spark:3.5.6
+          command: ["/opt/spark/bin/spark-submit"]
+          args:
+            - --master
+            - local[*]
+            - --conf
+            - spark.driver.extraJavaOptions=-Divy.cache.dir=/tmp -Divy.home=/tmp
+            - --conf
+            - spark.executor.extraJavaOptions=-Divy.cache.dir=/tmp -Divy.home=/tmp
+            - --conf
+            - spark.hadoop.fs.s3a.endpoint=http://radiant-minio:9000
+            - --conf
+            - spark.hadoop.fs.s3a.endpoint.region=us-east-1
+            - --conf
+            - spark.hadoop.fs.s3a.path.style.access=true
+            - --conf
+            - spark.hadoop.fs.s3a.access.key=admin
+            - --conf
+            - spark.hadoop.fs.s3a.secret.key=password
+            - --conf
+            - spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
+            - --conf
+            - spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+            - --conf
+            - spark.sql.catalog.polaris=org.apache.iceberg.spark.SparkCatalog
+            - --conf
+            - spark.sql.catalog.polaris.type=rest
+            - --conf
+            - spark.sql.catalog.polaris.uri=http://radiant-polaris:8181/api/catalog
+            - --conf
+            - spark.sql.catalog.polaris.warehouse=polaris
+            - --conf
+            - spark.sql.catalog.polaris.header.Polaris-Realm=radiant
+            - --conf
+            - spark.sql.catalog.polaris.credential=root:password
+            - --conf
+            - spark.sql.catalog.polaris.scope=PRINCIPAL_ROLE:CATALOG_MANAGE_CONTENT
+            - --conf
+            - spark.sql.catalog.polaris.io-impl=org.apache.iceberg.aws.s3.S3FileIO
+            - --conf
+            - spark.sql.catalog.polaris.s3.endpoint=http://radiant-minio:9000
+            - --conf
+            - spark.sql.catalog.polaris.s3.path-style-access=true
+            - --conf
+            - spark.sql.catalog.polaris.s3.access-key-id=admin
+            - --conf
+            - spark.sql.catalog.polaris.s3.secret-access-key=password
+            - --conf
+            - spark.sql.catalog.polaris.client.region=us-east-1
+            - --packages
+            - org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.2,org.apache.iceberg:iceberg-aws-bundle:1.9.2,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.367
+            - /app/copy_parquet.py
+
+          volumeMounts:
+            - name: radiant-polaris-init-tables-spark-script
+              mountPath: /app
+              readOnly: true
+
+      volumes:
+        - name: radiant-polaris-init-tables-spark-script
+          configMap:
+            name: radiant-polaris-init-tables-spark-script

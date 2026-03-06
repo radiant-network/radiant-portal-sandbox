@@ -74,18 +74,18 @@ postgres-585445b9cc-gxnvx             1/1     Running     0          23s
 postgres-init-job-fhtgf               0/1     Completed   0          23s
 ```
 
-## Install Iceberg REST Catalog
+## Install polaris
 ```
-kubectl apply -f k8s/iceberg-rest/
+kubectl apply -f k8s/polaris/deploy
 ```
 
-## Monitor Iceberg catalog pod is running (1 minutes)
+## Monitor polaris pod is running (1 minute)
 ```
-kubectl get po | grep iceberg
+kubectl get po | grep radiant-polaris
 ```
-Results 1 pod running :
+Results 1 pod running:
 ```
-radiant-iceberg-rest-6f488444f7-rv9gv   1/1     Running     0          17s
+radiant-polaris-6c6c96bc58-ncpbv      1/1     Running     0          38s
 ```
 
 ## Install locally mc (MinIO client)
@@ -98,18 +98,21 @@ mc mirror data/input_parquet/ localminio/warehouse/input_parquet/
 mc mirror data/vcf/ localminio/vcf/
 ```
 
-## Init Iceberg Catalog
+## Init Polaris Catalog and tables
 ```
-kubectl apply -f k8s/init-iceberg-catalog
+kubectl apply -f k8s/polaris/init
 ```
 
-## Monitor Iceberg Init catalog pod is completed (5 minutes the first time, due to large image pulling)
+## Monitor Init Polaris Catalog and Tables (2 minutes)
+
 ```
-kubectl get po | grep init-iceberg
+kubectl get po | grep polaris-init
 ```
-Results 1 pod completed:
+
+Results 2 pods running:
 ```
-radiant-init-iceberg-catalog-job-76vbf   0/1     Completed   0          62s
+radiant-polaris-init-catalog-zdk4r      0/1     Completed   0          93s
+radiant-polaris-init-tables-job-4kw5f   0/1     Completed   0          93s
 ```
 
 ## Install Starrocks
@@ -192,7 +195,7 @@ radiant-portal-ui-7659677b49-g5mjx       1/1     Running     0          25s
 
 ## Mount volume for dags in minikube
 
-Checkout the radiant-portal-pipline project repository to your local workspace :
+Checkout the radiant-portal-pipeline project repository to your local workspace :
 ```
 cd YOUR_WORKSPACE
 git clone git@github.com:radiant-network/radiant-portal-pipeline.git
@@ -227,7 +230,7 @@ helm install airflow apache-airflow/airflow -f values/airflow-values.yaml
 ```
 Took 5 minutes to install Airflow
 
-## Monitor Airflow podd are running (5 minutes)
+## Monitor Airflow pod are running (5 minutes)
 ```
 kubectl get po | grep airflow
 ```
