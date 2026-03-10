@@ -95,7 +95,8 @@ On Mac :
 brew install minio/stable/mc
 mc alias set localminio http://127.0.0.1:9000 admin password
 mc mirror data/input_parquet/ localminio/warehouse/input_parquet/
-mc mirror data/vcf/ localminio/vcf/
+mc mirror data/vcf/germline localminio/vcf/
+mc mirror data/vcf/somatic localminio/vcf/
 ```
 
 ## Init Polaris Catalog and tables
