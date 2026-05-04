@@ -1,0 +1,8 @@
+--no-index
+--find-links /usr/local/airflow/plugins
+--constraint /usr/local/airflow/plugins/constraints-3.12.txt
+
+# Radiant specific additional requirements for MWAA
+apache-airflow-providers-common-sql==1.27.5
+apache-airflow-providers-mysql==6.3.3
+pydantic==2.11.7
