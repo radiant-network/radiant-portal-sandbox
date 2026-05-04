@@ -1,0 +1,111 @@
+executor: "CeleryExecutor"
+# Default airflow tag to deploy
+defaultAirflowTag: "3.0.6"
+# Airflow version (Used to make some decisions based on Airflow Version being deployed)
+airflowVersion: "3.0.6"
+apiServer:
+  service:
+    type: LoadBalancer
+webserver:   
+  defaultUser:
+    enabled: true
+    username: airflow
+    password: airflow
+    role: Admin
+config:
+  api:
+    auth_backends: "airflow.api.auth.backend.basic_auth"
+
+
+postgresql:
+  enabled: false
+
+dags:
+  persistence:
+    enabled: true
+    existingClaim: radiant-dags-pvc
+#    subPath: ""
+  gitSync:
+    enabled: false
+
+logs:
+  persistence:
+    enabled: true
+    existingClaim: radiant-logs-pvc
+
+# POC note: Tweaked the image name to make sure it is using the airflow 3 image (manually built for this POC)
+images:
+  airflow:
+    repository: ghcr.io/radiant-network/radiant-airflow3
+    tag: 1.0.5
+    pullPolicy: IfNotPresent
+
+data:
+  metadataConnection:
+    user: postgres
+    pass: postgres
+    protocol: postgresql
+    host: postgres
+    port: 5432
+    db: airflow
+
+
+extraEnv: |
+  - name: PYTHONPATH
+    value: /opt/airflow/dags
+  - name: AWS_REGION
+    value: us-east-1
+  - name: AWS_ACCESS_KEY_ID
+    value: admin
+  - name: AWS_SECRET_ACCESS_KEY
+    value: password
+  - name: AWS_ENDPOINT_URL
+    value: "http://radiant-minio:9000"
+  - name: AWS_ALLOW_HTTP
+    value: "true"
+  - name: PYICEBERG_CATALOG__DEFAULT__URI
+    value: "http://radiant-polaris:8181/api/catalog"
+  - name: PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT
+    value: "http://radiant-minio:9000"
+  - name: PYICEBERG_CATALOG__DEFAULT__WAREHOUSE
+    value: "polaris"
+  - name: PYICEBERG_CATALOG__DEFAULT__CREDENTIAL
+    value: "root:password"
+  - name: PYICEBERG_CATALOG__DEFAULT__SCOPE
+    value: "PRINCIPAL_ROLE:CATALOG_MANAGE_CONTENT"
+  - name: PYICEBERG_CATALOG__DEFAULT__HEADER__Polaris-Realm
+    value: "radiant"
+  - name: PYICEBERG_CATALOG__DEFAULT__HEADER__X-Iceberg-Access-Delegation
+    value: ""
+  - name: PYICEBERG_CATALOG__DEFAULT__OAUTH2_SERVER_URI
+    value: "http://radiant-polaris:8181/api/catalog/v1/oauth/tokens"
+  - name: RADIANT_ICEBERG_NAMESPACE
+    value: "radiant"
+  - name: AIRFLOW_CONN_STARROCKS_CONN
+    value: "mysql://root@radiant-starrocks-fe:9030/radiant"
+  - name: AIRFLOW_CONN_RADIANT_POSTGRES_CONN
+    value: "postgresql://postgres:postgres@postgres:5432/radiant"
+  - name: RADIANT_TASK_OPERATOR_KUBERNETES_NAMESPACE
+    value: radiant
+  - name: RADIANT_TASK_OPERATOR_IMAGE
+    value: "ghcr.io/radiant-network/radiant-airflow-task-operator:latest"
+  - name: RADIANT_TASK_OPERATOR_PYTHONPATH
+    value: "/opt/radiant"
+
+#env:
+#  - name: AIRFLOW__CORE__DAGS_FOLDER
+#    value: /opt/airflow/dags
+#  - name: AWS_ACCESS_KEY_ID
+#    valueFrom:
+#      secretKeyRef:
+#        name: minio-creds
+#        key: accessKey
+#  - name: AWS_SECRET_ACCESS_KEY
+#    valueFrom:
+#      secretKeyRef:
+#        name: minio-creds
+#        key: secretKey
+#
+#extraVolumeMounts:
+#  - name: dags
+#    mountPath: /opt/airflow/dags
