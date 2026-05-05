@@ -225,10 +225,24 @@ kubectl apply -f k8s/airflow/
 ```
 
 ## Install Airflow
+
+To install Airflow 2:
 ```
-helm repo add apache-airflow https://airflow.apache.org
-helm install airflow apache-airflow/airflow -f values/airflow-values.yaml
+ helm install airflow apache-airflow/airflow  --version 1.19.0  -f values/airflow2-values.yaml 
 ```
+
+To install Airflow 3:
+- Build the docker image:
+  ```
+  cd docker/airflow3
+  eval $(minikube -p minikube docker-env)
+  docker build -t ghcr.io/radiant-network/radiant-airflow3:1.0.5 .
+  ```
+- Install via helm:
+  ```
+	helm install airflow apache-airflow/airflow  --version 1.21.0  -f values/airflow3-values.yaml 
+  ```
+
 Took 5 minutes to install Airflow
 
 ## Monitor Airflow pod are running (5 minutes)

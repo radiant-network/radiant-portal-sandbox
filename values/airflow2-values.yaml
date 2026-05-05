@@ -10,6 +10,7 @@ webserver:
     enabled: true
     username: airflow
     password: airflow
+    role: Admin
 config:
   api:
     auth_backends: "airflow.api.auth.backend.basic_auth"
