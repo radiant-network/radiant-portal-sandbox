@@ -33,7 +33,7 @@ logs:
     enabled: true
     existingClaim: radiant-logs-pvc
 
-# POC note: Tweaked the image name to make sure it is using the airflow 3 image (manually built for this POC)
+# Using a manually built docker image for now. See instructions in README.
 images:
   airflow:
     repository: ghcr.io/radiant-network/radiant-airflow3

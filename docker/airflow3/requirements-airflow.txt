@@ -1,18 +1,7 @@
 # Minimal Airflow runtime needed
 
-
-# POC Note: we of course bump the versions to match airflow 3.0.6.
-# The provider version was taken from the constraints file.
 apache-airflow==3.0.6
 apache-airflow-providers-cncf-kubernetes==10.7.0
-
-
-# POC note:
-# To ensure compatibility with Airflow 3, I aligned these dependency versions with those in the Airflow constraints file.
-# This minimizes the risk of conflicts with Airflow or its providers.
-# Where the original requirements had version ranges, I replaced them with the exact versions from the constraints file.
-# The new versions all respect original constraints except pydantic,
-# which is updated from 2.11.6 to 2.11.7
 
 attrs==25.3.0
 packaging==25.0
