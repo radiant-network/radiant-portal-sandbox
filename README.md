@@ -236,7 +236,7 @@ To install Airflow 3:
   ```
   cd docker/airflow3
   eval $(minikube -p minikube docker-env)
-  docker build -t ghcr.io/radiant-network/radiant-airflow3:1.0.5 .
+  docker build -t ghcr.io/radiant-network/radiant-airflow3:1.0.10 .
   ```
 - Install via helm:
   ```
@@ -298,7 +298,7 @@ Click on `Manage Realms`, then click on `Radiant`.
 Click on `Users`, then click on `Create a new User`.
 
 - Email verified: `ON`
-- Usernane: `user1` (or any username you want)
+- Username: `user1` (or any username you want)
 - Email: `user1@email.me` (or any email you want)
 - First Name: `User1` (or any first name you want)
 - Last Name: `Test` (or any last name you want)

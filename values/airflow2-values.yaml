@@ -34,7 +34,7 @@ logs:
 images:
   airflow:
     repository: ghcr.io/radiant-network/radiant-airflow
-    tag: 1.0.5
+    tag: 1.0.10
     pullPolicy: IfNotPresent
 
 data:
@@ -88,21 +88,3 @@ extraEnv: |
     value: "ghcr.io/radiant-network/radiant-airflow-task-operator:latest"
   - name: RADIANT_TASK_OPERATOR_PYTHONPATH
     value: "/opt/radiant"
-
-#env:
-#  - name: AIRFLOW__CORE__DAGS_FOLDER
-#    value: /opt/airflow/dags
-#  - name: AWS_ACCESS_KEY_ID
-#    valueFrom:
-#      secretKeyRef:
-#        name: minio-creds
-#        key: accessKey
-#  - name: AWS_SECRET_ACCESS_KEY
-#    valueFrom:
-#      secretKeyRef:
-#        name: minio-creds
-#        key: secretKey
-#
-#extraVolumeMounts:
-#  - name: dags
-#    mountPath: /opt/airflow/dags
