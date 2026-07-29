@@ -85,5 +85,9 @@ extraEnv: |
     value: radiant
   - name: RADIANT_TASK_OPERATOR_IMAGE
     value: "ghcr.io/radiant-network/radiant-airflow-task-operator:latest"
+  - name: RADIANT_DBT_OPERATOR_IMAGE
+    value: "ghcr.io/radiant-network/radiant-airflow-dbt-operator:latest"
   - name: RADIANT_TASK_OPERATOR_PYTHONPATH
     value: "/opt/radiant"
+  - name: RADIANT_DBT_S3_WORKSPACE
+    value: "warehouse"

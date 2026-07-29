@@ -35,6 +35,7 @@ spec:
               sleep 15; \
               echo 'Create radiant database...' && \
               mysql -u root -h radiant-starrocks-fe -P 9030 -e "CREATE DATABASE IF NOT EXISTS radiant" && \
+              mysql -u root -h radiant-starrocks-fe -P 9030 -e "CREATE DATABASE IF NOT EXISTS radiant_tenant" && \
               sleep 15; \
               echo 'Create radiant iceberg catalog...' && \
               mysql -h radiant-starrocks-fe -P 9030 -u root -e "

@@ -217,6 +217,15 @@ eval $(minikube -p minikube docker-env)  # To ensure the image is built inside m
 docker build -t ghcr.io/radiant-network/radiant-airflow-task-operator:latest -f Dockerfile.radiant.operator .
 ```
 
+## Pre-building the Radiant dbt operator image
+
+Inside the `radiant-portal-pipeline` directory, run the following command to build the Radiant task operator image:
+
+```
+eval $(minikube -p minikube docker-env)  # To ensure the image is built inside minikube's docker environment
+docker build -t ghcr.io/radiant-network/radiant-airflow-dbt-operator:latest -f Dockerfile.radiant.dbt .
+```
+
 **Important note:** Ensure the image's name and tag matches with the `RADIANT_TASK_OPERATOR_IMAGE` from the `values/airflow-values.yaml` file.
 
 ## Install airflow volumes for logs and dags
@@ -226,12 +235,6 @@ kubectl apply -f k8s/airflow/
 
 ## Install Airflow
 
-To install Airflow 2:
-```
- helm install airflow apache-airflow/airflow  --version 1.19.0  -f values/airflow2-values.yaml 
-```
-
-To install Airflow 3:
 - Build the docker image:
   ```
   cd docker/airflow3
@@ -240,7 +243,7 @@ To install Airflow 3:
   ```
 - Install via helm:
   ```
-	helm install airflow apache-airflow/airflow  --version 1.21.0  -f values/airflow3-values.yaml 
+	helm install airflow apache-airflow/airflow  --version 1.21.0  -f values/airflow3-values.yaml
   ```
 
 Took 5 minutes to install Airflow
@@ -273,13 +276,14 @@ Configure the pools :
 Trigger the following dags in order. Each dag takes a few minutes to run. Wait for each dag to complete before triggering the next one.
 1. Trigger dag `[QA] Radiant - Init Simulated Clinical Data`
    - Set vcf_bucket_prefix to `s3://vcf`
-2. Trigger dag `Radiant - Init StarRocks Tables` (~ 2 minutes)
+2. Trigger dag `Radiant - Init StarRocks Base Tables` (~ 2 minutes)
 3. Trigger dag  `Radiant - Init Iceberg Tables` (~ 1 minutes)
 4. Trigger dag `Radiant - Import Open Data` (~ 5 minutes)
    - In raw_rcv_filepaths, set the value `s3://warehouse/input_parquet/clinvar_rcv_summary/*.json`
    - In cytoband_filepath, set the value `s3://warehouse/input_parquet/cytoband/*.txt.gz`
 5. Trigger dag `Radiant - Scheduled Import` (~ 5 minutes)
 
+The last step of Radiant - Scheduled Import will fail — this is expected: it triggers Radiant - Data Integrity Checks, which flags the (deliberately imperfect) sandbox test data.
 
 ## Edit /etc/host file 
 Add the following line to your /etc/hosts file to access the keycloak admin console:
