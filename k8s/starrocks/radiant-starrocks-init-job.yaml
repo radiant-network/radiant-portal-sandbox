@@ -7,12 +7,12 @@ spec:
     spec:
       initContainers:
         - name: wait-for-starrocks
-          image: starrocks/cn-ubuntu:3.4.2
+          image: starrocks/cn-ubuntu:4.0.13
           command: ['sh', '-c', 'until /usr/bin/mysql -u root -h radiant-starrocks-fe -P 9030 -e "SHOW COMPUTE NODES\G" |grep "Alive: true"; do echo waiting for postgres; sleep 2; done']
 
       containers:
         - name: init-starrocks
-          image: starrocks/cn-ubuntu:3.4.2
+          image: starrocks/cn-ubuntu:4.0.13
           command:
             - sh
             - -c

@@ -39,7 +39,7 @@ spec:
               echo 'aws_s3_secret_key = password' >> /opt/starrocks/fe/conf/fe.conf
               echo 'enable_udf = true' >> /opt/starrocks/fe/conf/fe.conf
               exec /opt/starrocks/fe/bin/start_fe.sh --host_type FQDN
-          image: starrocks/fe-ubuntu:3.4.2
+          image: starrocks/fe-ubuntu:4.0.13
           livenessProbe:
             exec:
               command:
@@ -57,6 +57,10 @@ spec:
               protocol: TCP
             - containerPort: 9030
               protocol: TCP
+          resources:
+            requests:
+              cpu: "1"
+              memory: 1Gi
           volumeMounts:
             - mountPath: /opt/starrocks/fe/meta
               name: radiant-starrocks-fe-pvc

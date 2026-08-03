@@ -31,7 +31,7 @@ spec:
           env:
             - name: HOST_TYPE
               value: FQDN
-          image: starrocks/cn-ubuntu:3.4.2
+          image: starrocks/cn-ubuntu:4.0.13
           livenessProbe:
             exec:
               command:
@@ -53,5 +53,9 @@ spec:
               protocol: TCP
             - containerPort: 9070
               protocol: TCP
+          resources:
+            requests:
+              cpu: "2"
+              memory: 4Gi
       hostname: radiant-starrocks-cn
       restartPolicy: Always

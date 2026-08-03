@@ -6,7 +6,7 @@ airflowVersion: "3.2.1"
 apiServer:
   service:
     type: LoadBalancer
-webserver:   
+webserver:
   defaultUser:
     enabled: true
     username: airflow
@@ -91,3 +91,28 @@ extraEnv: |
     value: "/opt/radiant"
   - name: RADIANT_DBT_S3_WORKSPACE
     value: "warehouse"
+  # Shrink the TableAccumulator flush threshold, which is what sets an extraction task's memory
+  # floor -- independently of how small the VCF is. At the 500MB default a buffer only flushes at
+  # 500MB, pa.concat_tables briefly holds both the old and concatenated copy (~1GiB for a single
+  # buffer), and three buffers are live at once, so every writer wanted 2-2.5GiB and a 1Gi limit
+  # OOMKilled (exit 137) on the 21M SH032 VCF. At 64MB the peak is roughly 3x64MB of Arrow plus a
+  # transient copy, so a few hundred MB on top of the interpreter/pyarrow/cyvcf2 baseline.
+  #
+  # Local only. The 500MB default is deliberately just under Iceberg's
+  # WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT; lowering it in a real deployment trades memory for a lot
+  # of small parquet files.
+  - name: RADIANT_PARQUET_FILE_SIZE_MB
+    value: "'64'"
+  # Sized for the 64MB threshold above -- raise these together if that goes back up.
+  - name: RADIANT_TASK_OPERATOR_SNV_CPU
+    value: "500m"
+  - name: RADIANT_TASK_OPERATOR_SNV_MEMORY
+    value: "512Mi"
+  - name: RADIANT_TASK_OPERATOR_SNV_MEMORY_LIMIT
+    value: "1Gi"
+  - name: RADIANT_TASK_OPERATOR_CNV_CPU
+    value: "250m"
+  - name: RADIANT_TASK_OPERATOR_METADATA_CPU
+    value: "250m"
+  - name: RADIANT_TASK_OPERATOR_METADATA_MEMORY
+    value: "512Mi"
