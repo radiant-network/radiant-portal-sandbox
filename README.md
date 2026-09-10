@@ -329,127 +329,179 @@ Then you should be able to see the case list page.
 
 If you click on Case 1 (Family trio) or case 8 (Solo), you should be able to click on Variants tab and see the variants for the case.
 
-## Using OpenFGA Authorization
+## Open Data Lake integration
 
-(Ignore this section if you don't want to be actively testing OpenFGA authorization)
+(Ignore this section if you are not testing the OpenDataLake → Radiant ETL integration, SJRA-1811)
 
-You can switch to OpenFGA for API authorization by setting the `RADIANT_AUTHORIZATION_PROVIDER` to `openfga` in the `k8s/api/deployment.yaml` file and then redeploying the API.
-
-```
-kubectl apply -f k8s/api/
-```
-
-### Install OpenFGA
-
-**Note**:
-This runs OpenFGA with in-memory datastore, which means all data will be lost when the pod is restarted.
-This is acceptable for testing and development purposes, but not for production use.
+The unified sandbox runs the [radiant-open-datalake](https://github.com/radiant-network/radiant-open-datalake)
+ETL **inside this stack** rather than as a separate minikube: it reuses the MinIO, Postgres, Polaris,
+StarRocks and Airflow installed above, all in the `radiant` namespace. The Open Datalake ETL writes
+Iceberg tables into their own Polaris catalog (`opendatalake`, namespace `reference`), and StarRocks
+attaches them as the external catalog `opendatalake_catalog`, so Radiant's open-data DAG can read
+them.
 
 ```
-helm repo add openfga https://openfga.github.io/helm-charts
-helm install openfga openfga/openfga -f values/openfga-values.yaml
+radiant-open-datalake DAGs (in the same Airflow)
+   └─> Spark pod (spark-submit --master local[*])
+         ├── raw in:  s3://opendatalake-dev/raw/landing/<source>/<version>   (MinIO)
+         └── out:     Polaris catalog `opendatalake` -> s3://opendatalake-dev/iceberg/reference
+                          └─> StarRocks external catalog `opendatalake_catalog`
+                                └─> Radiant - Import Open Data
 ```
 
-### Monitor OpenFGA pod is running (1 minutes)
+Prerequisite: the `radiant-open-datalake` repository checked out next to this one.
 ```
-kubectl get po | grep openfga
-```
-
-Results 1 pod running :
-
-```
-openfga-7c9f5c6b9b-5k5t4          1/1     Running     0          25s
+cd YOUR_WORKSPACE
+git clone git@github.com:radiant-network/radiant-open-datalake.git
 ```
 
-### Setup KeyCloak for OpenFGA authorization
+### Bucket, Polaris catalog and StarRocks catalog
 
-To use OpenFGA authorization, you need to create the following in Keycloak:
+These ship with the manifests already applied above, so a fresh install needs nothing extra:
+- `k8s/minio/radiant-minio-bucket-init-job.yaml` creates the `opendatalake-dev` bucket.
+- `k8s/polaris/init/radiant-polaris-init-opendatalake-catalog-job.yaml` creates the Polaris catalog
+  `opendatalake` (warehouse `s3://opendatalake-dev/iceberg`) and the `reference` namespace.
+- `k8s/starrocks/radiant-starrocks-opendatalake-catalog-job.yaml` creates the StarRocks external
+  catalog `opendatalake_catalog`.
 
-#### Create clients
+On an **existing** sandbox, apply just the new pieces and re-run the finished jobs:
+```
+kubectl delete job radiant-minio-bucket-init-job
+kubectl apply -f k8s/minio/
+kubectl apply -f k8s/polaris/init/
+kubectl apply -f k8s/starrocks/
+```
 
-Click `Clients` 
+Verify:
+```
+kubectl get po | grep -E "opendatalake|bucket-init"
+mc ls localminio/opendatalake-dev
+kubectl exec -it deploy/radiant-starrocks-fe -- mysql -P9030 -h127.0.0.1 -uroot -e "SHOW CATALOGS;"
+```
+`SHOW CATALOGS` should list `radiant_iceberg_catalog`, `radiant_jdbc` and `opendatalake_catalog`.
 
-In General Settings, set the following: 
-- `Client type`: Leave `OpenID Connect`
-- `Client ID`: The name of your project (e.g., `CBTN`)
-- `Name`: The name of your project (e.g., `CBTN`)
+### Build the Open Datalake images
 
-Click `Next`
+The Spark ETL image bundles the Scala fat JAR. Build the JAR first, then the image — the build
+context is the sibling repo's `spark/` directory, and the Dockerfile lives here:
+```
+cd ../radiant-open-datalake/spark
+sbt clean assembly
 
-In Capability config, set the following:
-- `Client authentication`: `On`
-- `Authorization`: `Off`
-- `Authentication flow`: Uncheck everything
+cd ../../radiant-portal-sandbox
+eval $(minikube -p minikube docker-env)
+docker build -t ghcr.io/radiant-network/opendatalake-spark:latest \
+  -f docker/opendatalake-spark/Dockerfile ../radiant-open-datalake/spark
+```
 
-Click `Next`, then click `Save`.
+The download task-operator image is built from the sibling repo (its Dockerfile needs that repo's
+`requirements*.txt` as context):
+```
+cd ../radiant-open-datalake/airflow
+eval $(minikube -p minikube docker-env)
+docker build -t ghcr.io/radiant-network/opendatalake-airflow-task-operator:latest \
+  -f Dockerfile.opendatalake.operator .
+```
 
-#### Create roles
+### Apply the sandbox operator swaps
 
-Then, for that client, click on `Roles` tab, then click on `Create Role`.
-
-Create the following roles and save them:
-- `geneticist`
-- `requester`
-
-#### Assign roles to users
-
-Back to `Users` tab, select the user you created earlier (e.g., `user1`).
-Click on `Role Mappings` tab, then select the client you created earlier (e.g., `CBTN`) in the `Client Roles` dropdown.
-
-Once all the above is done, you should see the appropriate `resource_access` claim in your JWT token when you log in via Keycloak.
-(You can safely ignore `account`, since this is KeyCloak specific and not used in the API)
+The Open Datalake DAGs target AWS (ECS for downloads, EMR Serverless for Spark). Swap both for the
+in-cluster Kubernetes equivalents. The versions in `opendatalake/operators/` are this sandbox's
+variants — they use the `radiant` namespace, `radiant-minio` and `radiant-polaris`, unlike the ones
+in the sibling repo's own `sandbox/operators/`, which assume a standalone `opendatalake` namespace.
 
 ```
-{
-  "exp": 1761764140,
-  "iat": 1761763840,
-  "jti": "onrtro:c5b8d4e4-f2d4-65eb-664b-a5268e7915b9",
-  "iss": "http://radiant-keycloak:8282/realms/Radiant",
-  "aud": [
-    "CBTN",
-    "account"
-  ],
-  "sub": "682bf9ff-d1c0-4417-bc68-657ed00de840",
-  "typ": "Bearer",
-  "azp": "radiant",
-  "sid": "af374f2a-ecc2-b16b-f3fe-492758cd5877",
-  "acr": "1",
-  "allowed-origins": [
-    "*"
-  ],
-  "realm_access": {
-    "roles": [
-      "offline_access",
-      "default-roles-radiant",
-      "uma_authorization"
-    ]
-  },
-  "resource_access": {
-    "CBTN": {
-      "roles": [
-        "requester",
-        "geneticist"
-      ]
-    },
-    "radiant": {
-      "roles": [
-        "radiant"
-      ]
-    },
-    "account": {
-      "roles": [
-        "manage-account",
-        "manage-account-links",
-        "view-profile"
-      ]
-    }
-  },
-  "scope": "profile email",
-  "email_verified": true,
-  "name": "User1 Test",
-  "preferred_username": "user1",
-  "given_name": "User1",
-  "family_name": "Test",
-  "email": "user1@email.me"
-}
+cp opendatalake/operators/k8s.py \
+   ../radiant-open-datalake/airflow/opendatalake/lib/operators/k8s.py
+cp opendatalake/operators/spark_k8s.py \
+   ../radiant-open-datalake/airflow/opendatalake/lib/operators/spark_k8s.py
+
+cd ../radiant-open-datalake/airflow
+sed -i '' 's/operators\.ecs/operators\.k8s/g' opendatalake/dags/download_source.py
+sed -i '' 's/operators\.emr/operators\.spark_k8s/g' opendatalake/dags/import_source.py
 ```
+
+To revert:
+```
+cd ../radiant-open-datalake/airflow
+sed -i '' 's/operators\.k8s/operators\.ecs/g' opendatalake/dags/download_source.py
+sed -i '' 's/operators\.spark_k8s/operators\.emr/g' opendatalake/dags/import_source.py
+rm opendatalake/lib/operators/k8s.py opendatalake/lib/operators/spark_k8s.py
+```
+
+**Do not commit the swap** to `radiant-open-datalake` — those operators have no place in the AWS
+deployment.
+
+`opendatalake/dags/run_sql_on_iceberg.py` is deliberately **not** swapped and will show a DAG import
+error in the UI ("Incomplete EMR Serverless configuration; missing field(s): application_id, …").
+It is a debugging utility, not part of the integration path, and it cannot use the sandbox operator
+as-is: it runs in PySpark mode (passes `entry_point=` with an uploaded `.py` script), whereas
+`spark_k8s.py` only implements JAR mode (`--class <entry_class> <jar>`). The other 33 opendatalake
+DAGs are unaffected. To silence the banner, either set the six `OPENDATALAKE_EMR_*` variables it
+names to dummy values in `values/airflow3-values.yaml` (the DAG then parses but still cannot run
+without EMR), or leave it as-is.
+
+### Mount the Open Datalake DAGs
+
+In a new terminal, alongside the `radiant` mount already running:
+```
+minikube mount $(pwd)/radiant-open-datalake/airflow/opendatalake:/opt/airflow/dags/opendatalake
+```
+The package is mounted *under* the DAGs folder (not as the DAGs folder) so the DAG files'
+`from opendatalake... import` statements resolve — `/opt/airflow/dags` is on `PYTHONPATH` and must
+contain the `opendatalake/` package root. Leave this running like the `radiant` mount.
+
+**Start this mount before installing or upgrading Airflow.** The pods bind-mount
+`/opt/airflow/dags` at startup, and a 9p submount created *afterwards* does not propagate into a
+running container's mount namespace — the pod keeps seeing the empty directory that was there when
+it started, while `minikube ssh -- ls /opt/airflow/dags/opendatalake` shows the files. The symptom
+is opendatalake DAGs missing from the UI with **no import error**, because the processor never sees
+the files at all. If that happens, the mount is fine; just restart the components that mount it:
+```
+kubectl rollout restart deploy/airflow-dag-processor deploy/airflow-scheduler \
+  statefulset/airflow-worker statefulset/airflow-triggerer
+```
+Confirm with `kubectl exec deploy/airflow-dag-processor -c dag-processor -- ls /opt/airflow/dags/opendatalake`
+(should list `dags` and `lib`, not be empty).
+
+### Airflow
+
+The Open Datalake env vars are already in `values/airflow3-values.yaml`. If Airflow is running,
+pick them up with:
+```
+helm upgrade airflow apache-airflow/airflow --version 1.21.0 -f values/airflow3-values.yaml
+```
+
+No Airflow image rebuild is needed: the Open Datalake DAGs import `airflow.providers.amazon`, which
+the base image already bundles at the version `constraints-python3.12.txt` pins.
+
+Then create the pools (Admin → Pools), 1 slot each:
+- `opendatalake_download_tasks_pool`
+- `opendatalake_direct_upload_tasks_pool`
+- `opendatalake_import_tasks_pool`
+
+Two sources need credentials before their download DAG will run: fill in
+`OPENDATALAKE_SPLICEAI_ACCESS_TOKEN` and `OPENDATALAKE_OMIM_DOWNLOAD_KEY` in
+`values/airflow3-values.yaml`, which ship empty. Left empty, only those two sources fail, and they
+fail immediately with an `AirflowException` naming the missing variable.
+
+### Run the Open Datalake DAGs
+
+Unpause the `opendatalake` DAGs you want, then trigger
+`Open Datalake - Discover New Source Version`. Each discovered source chains download → import; the
+import task runs the Spark pod and writes the Iceberg table.
+
+Browse the result from StarRocks:
+```sh
+kubectl exec -it deploy/radiant-starrocks-fe -- mysql -P9030 -h127.0.0.1 -uroot
+```
+```sql
+SET CATALOG opendatalake_catalog;
+SHOW DATABASES;          -- reference
+USE reference;
+SHOW TABLES;
+SELECT * FROM clinvar_v1 LIMIT 10;                 -- main branch
+SELECT * FROM clinvar_v1 VERSION AS OF '20260804'; -- a version branch
+```
+Each `dataset_version` is an Iceberg branch named after the version, so `main` can be empty until a
+release is promoted — read a specific branch with `VERSION AS OF`.

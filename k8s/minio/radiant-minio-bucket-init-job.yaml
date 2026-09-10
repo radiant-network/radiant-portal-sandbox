@@ -28,6 +28,19 @@ spec:
               mc mb -p myminio/starrocks || echo "Bucket starrocks already exists"
               mc mb -p myminio/warehouse || echo "Bucket warehouse already exists"
               mc mb -p myminio/vcf || echo "Bucket vcf already exists"
+              # Open Datalake: raw landing (raw/landing/<source>/<version>) + Iceberg warehouse
+              # (iceberg/reference).
+              #
+              # SHARED CONSTANT -- bucket `opendatalake-dev` / root `s3://opendatalake-dev/iceberg`
+              # is hardcoded in four places that must agree. A mismatch surfaces as a 404
+              # NoSuchBucket at Iceberg write time, not as a config error:
+              #   k8s/minio/radiant-minio-bucket-init-job.yaml       <- here, creates the bucket
+              #   k8s/polaris/init/radiant-polaris-init-opendatalake-catalog-job.yaml
+              #                                                      CATALOG_WAREHOUSE / allowedLocations
+              #   docker/opendatalake-spark/Dockerfile               sed rewrite of the baked config
+              #   values/airflow3-values.yaml                        OPENDATALAKE_RAW_BUCKET,
+              #                                                      OPENDATALAKE_EMR_WAREHOUSE_S3
+              mc mb -p myminio/opendatalake-dev || echo "Bucket opendatalake-dev already exists"
           env:
             - name: MINIO_ROOT_USER
               value: "admin"

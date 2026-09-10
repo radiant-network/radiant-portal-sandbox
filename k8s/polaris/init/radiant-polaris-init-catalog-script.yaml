@@ -40,8 +40,13 @@ data:
       local client_id="$2"
       local client_secret="$3"
 
-      local output=$(java -jar /deployments/polaris-admin-tool.jar bootstrap -r "$realm" -c "$realm,$client_id,$client_secret" -p 2>&1)
-      local status=$?
+      # Declare and assign separately: `local x=$(cmd)` returns the exit status of `local` (always
+      # 0), so $? never reflected the bootstrap and the handling below was unreachable -- a failed
+      # bootstrap fell through silently. The `|| status=$?` also keeps `set -e` from aborting here,
+      # since a re-run against an already-bootstrapped realm exits non-zero by design.
+      local output
+      local status=0
+      output=$(java -jar /deployments/polaris-admin-tool.jar bootstrap -r "$realm" -c "$realm,$client_id,$client_secret" -p 2>&1) || status=$?
       if [ $status -ne 0 ]; then
         if echo "$output" | grep -q "It appears this metastore manager has already been bootstrapped"; then
           echo "Realm already bootstrapped for realm ${realm} continuing..."
