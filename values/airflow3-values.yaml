@@ -56,13 +56,13 @@ extraEnv: |
   - name: AWS_SECRET_ACCESS_KEY
     value: password
   - name: AWS_ENDPOINT_URL
-    value: "http://radiant-minio:9000"
+    value: "http://radiant-rustfs:9000"
   - name: AWS_ALLOW_HTTP
     value: "true"
   - name: PYICEBERG_CATALOG__DEFAULT__URI
     value: "http://radiant-polaris:8181/api/catalog"
   - name: PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT
-    value: "http://radiant-minio:9000"
+    value: "http://radiant-rustfs:9000"
   - name: PYICEBERG_CATALOG__DEFAULT__WAREHOUSE
     value: "polaris"
   - name: PYICEBERG_CATALOG__DEFAULT__CREDENTIAL
@@ -116,11 +116,13 @@ extraEnv: |
     value: "250m"
   - name: RADIANT_TASK_OPERATOR_METADATA_MEMORY
     value: "512Mi"
+  - name: RADIANT_OPEN_DATA_USE_LEGACY_TABLES
+    value: "*"
 
   # ---------------------------------------------------------------------------
   # Open Datalake (radiant-open-datalake) -- the unified sandbox runs both DAG
   # sets in this one Airflow. The AWS_* vars above are shared: they already point
-  # at radiant-minio, which is the Open Datalake's S3 too.
+  # at radiant-rustfs, which is the Open Datalake's S3 too.
   # ---------------------------------------------------------------------------
   # boto3 reads AWS_DEFAULT_REGION, not AWS_REGION; the ECS/S3 hooks need it.
   - name: AWS_DEFAULT_REGION
@@ -130,12 +132,12 @@ extraEnv: |
         "conn_type": "Amazon Web Services",
         "login": "admin",
         "password": "password",
-        "host": "radiant-minio",
+        "host": "radiant-rustfs",
         "port": 9000,
         "extra": {
             "aws_access_key_id": "admin",
             "aws_secret_access_key": "password",
-            "endpoint_url": "http://radiant-minio:9000",
+            "endpoint_url": "http://radiant-rustfs:9000",
             "region_name": "us-east-1",
             "aws_allow_http": true,
             "verify": false
@@ -146,7 +148,7 @@ extraEnv: |
   # SHARED CONSTANT -- bucket `opendatalake-dev` / root `s3://opendatalake-dev/iceberg` is
   # hardcoded in four places that must agree. A mismatch surfaces as a 404 NoSuchBucket at Iceberg
   # write time, not as a config error:
-  #   k8s/minio/radiant-minio-bucket-init-job.yaml       creates the bucket
+  #   k8s/rustfs/radiant-rustfs-bucket-init-job.yaml       creates the bucket
   #   k8s/polaris/init/radiant-polaris-init-opendatalake-catalog-job.yaml
   #                                                      CATALOG_WAREHOUSE / allowedLocations
   #   docker/opendatalake-spark/Dockerfile               sed rewrite of the baked config

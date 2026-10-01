@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: radiant-rustfs
+  name: radiant-rustfs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: radiant-rustfs
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: radiant-rustfs
+    spec:
+      containers:
+        - image: rustfs/rustfs:1.0.0
+          name: radiant-rustfs
+          env:
+            # RUSTFS_VOLUMES is REQUIRED -- RustFS takes its storage roots from the environment,
+            # not from a positional argument the way `minio server /data` did. A single path is
+            # valid for a one-node sandbox; the upstream compose file uses the expansion form
+            # `/data/rustfs{0...3}` for erasure coding across four disks, which buys nothing here.
+            - name: RUSTFS_VOLUMES
+              value: /data/rustfs0
+            - name: RUSTFS_ADDRESS
+              value: 0.0.0.0:9000
+            - name: RUSTFS_CONSOLE_ADDRESS
+              value: 0.0.0.0:9001
+            - name: RUSTFS_CONSOLE_ENABLE
+              value: "true"
+            # Sandbox credentials, kept as admin/password so every downstream config that used to
+            # point at MinIO keeps working unchanged. RustFS would otherwise default both to
+            # `rustfsadmin`. Change one, grep for the rest.
+            - name: RUSTFS_ACCESS_KEY
+              value: admin
+            - name: RUSTFS_SECRET_KEY
+              value: password
+          ports:
+            - containerPort: 9000
+              protocol: TCP
+            - containerPort: 9001
+              protocol: TCP
+          # RustFS serves /health and /health/ready on the S3 port (RUSTFS_HEALTH_ENDPOINT_ENABLE
+          # defaults to true). Both are local to this pod -- unlike the StarRocks probes, which ask
+          # a *different* pod whether this one registered -- so a short delay is enough.
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 9000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 5
+          volumeMounts:
+            - mountPath: /data
+              name: rustfs-data-volume
+      restartPolicy: Always
+      volumes:
+        - name: rustfs-data-volume
+          persistentVolumeClaim:
+            claimName: rustfs-data-volume

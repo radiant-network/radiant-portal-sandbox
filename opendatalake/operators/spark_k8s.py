@@ -3,11 +3,11 @@
 This is the radiant-portal-sandbox variant of
 `radiant-open-datalake/airflow/sandbox/operators/spark_k8s.py`: same operator, retargeted at the
 unified sandbox, where the Open Datalake ETL shares the Radiant stack's namespace (`radiant`),
-MinIO (`radiant-minio`) and Polaris (`radiant-polaris`) instead of running its own copies in an
+RustFS (`radiant-rustfs`) and Polaris (`radiant-polaris`) instead of running its own copies in an
 `opendatalake` namespace.
 
 Runs the Open Datalake Spark ETL as `spark-submit --master local[*]` inside a
-KubernetesPodOperator, reading raw files from the in-cluster MinIO (via Hadoop S3A) and writing
+KubernetesPodOperator, reading raw files from the in-cluster RustFS (via Hadoop S3A) and writing
 Iceberg tables through the in-cluster Apache Polaris REST catalog.
 
 Keeps the class name `EmrServerlessJobOperator` so switching the DAG only rewrites the import path
@@ -25,7 +25,7 @@ against, `radiant-open-datalake/airflow/`:
         and optionally spark_conf / waiter_max_attempts
     sandbox/operators/spark_k8s.py                      the file this mirrors
 
-Only constants differ from that mirror: namespace, MinIO/Polaris service names, the Polaris
+Only constants differ from that mirror: namespace, RustFS/Polaris service names, the Polaris
 credential and scope, the added Polaris-Realm header, and the pod resources. The durable fix is to
 push this env-var parameterisation upstream and delete this copy; until then, re-diff the two files
 whenever the Open Datalake operators change.
@@ -53,7 +53,7 @@ JAR_PATH = "/opt/app/radiant-open-datalake-spark.jar"
 NAMESPACE = os.getenv("OPENDATALAKE_SPARK_NAMESPACE", "radiant")
 
 # In-cluster endpoints, shared with the Radiant stack.
-MINIO_ENDPOINT = os.getenv("AWS_ENDPOINT_URL", "http://radiant-minio:9000")
+RUSTFS_ENDPOINT = os.getenv("AWS_ENDPOINT_URL", "http://radiant-rustfs:9000")
 POLARIS_URI = os.getenv("OPENDATALAKE_POLARIS_URI", "http://radiant-polaris:8181/api/catalog")
 POLARIS_REALM = os.getenv("OPENDATALAKE_POLARIS_REALM", "radiant")
 POLARIS_CREDENTIAL = os.getenv("OPENDATALAKE_POLARIS_CREDENTIAL", "root:password")
@@ -62,16 +62,16 @@ POLARIS_CREDENTIAL = os.getenv("OPENDATALAKE_POLARIS_CREDENTIAL", "root:password
 # docker/opendatalake-spark/Dockerfile).
 _CONF_EXTRA_CLASSPATH = "/opt/app/conf-extra"
 
-# Spark conf for the sandbox: raw reads via S3A against MinIO, Iceberg writes via Polaris.
+# Spark conf for the sandbox: raw reads via S3A against RustFS, Iceberg writes via Polaris.
 _LOCAL_SPARK_CONF = {
-    # --- raw input: Hadoop S3A -> MinIO ---
+    # --- raw input: Hadoop S3A -> RustFS ---
     "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
     "spark.hadoop.fs.s3a.path.style.access": "true",
     "spark.hadoop.fs.s3a.access.key": "admin",
     "spark.hadoop.fs.s3a.secret.key": "password",
-    "spark.hadoop.fs.s3a.endpoint": MINIO_ENDPOINT,
+    "spark.hadoop.fs.s3a.endpoint": RUSTFS_ENDPOINT,
     "spark.hadoop.fs.s3a.endpoint.region": "us-east-1",
-    # --- Iceberg output: Polaris REST catalog (metadata) + direct MinIO S3 access (data) ---
+    # --- Iceberg output: Polaris REST catalog (metadata) + direct RustFS S3 access (data) ---
     "spark.sql.catalog.opendatalake.type": "rest",
     "spark.sql.catalog.opendatalake.uri": POLARIS_URI,
     "spark.sql.catalog.opendatalake.warehouse": "opendatalake",
@@ -84,11 +84,11 @@ _LOCAL_SPARK_CONF = {
     "spark.sql.catalog.opendatalake.header.Polaris-Realm": POLARIS_REALM,
     "spark.sql.catalog.opendatalake.token-refresh-enabled": "false",
     "spark.sql.catalog.opendatalake.client.region": "us-east-1",
-    # S3FileIO must talk to MinIO, not AWS. Set the endpoint + static creds explicitly rather than
+    # S3FileIO must talk to RustFS, not AWS. Set the endpoint + static creds explicitly rather than
     # relying on Polaris credential vending (vended endpoint wasn't applied -> S3FileIO fell back to
     # real AWS S3 and got 404 NoSuchBucket). Polaris here manages metadata only.
     "spark.sql.catalog.opendatalake.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
-    "spark.sql.catalog.opendatalake.s3.endpoint": MINIO_ENDPOINT,
+    "spark.sql.catalog.opendatalake.s3.endpoint": RUSTFS_ENDPOINT,
     "spark.sql.catalog.opendatalake.s3.path-style-access": "true",
     "spark.sql.catalog.opendatalake.s3.access-key-id": "admin",
     "spark.sql.catalog.opendatalake.s3.secret-access-key": "password",

@@ -12,7 +12,7 @@ data:
               "gnomad_sv"
               ]
     for table in tables:
-        # Read Parquet files from MinIO
+        # Read Parquet files from RustFS
         df = spark.read.parquet(f"s3a://warehouse/input_parquet/{table}/")
         # Write to Iceberg table via REST catalog
         df.writeTo(f"polaris.radiant.{table}").createOrReplace()

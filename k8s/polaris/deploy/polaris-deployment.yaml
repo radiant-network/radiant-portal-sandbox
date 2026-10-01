@@ -49,7 +49,7 @@ spec:
             - name: AWS_SECRET_ACCESS_KEY
               value: password
             - name: AWS_ENDPOINT_URL
-              value: http://radiant-minio:9000
+              value: http://radiant-rustfs:9000
             - name: POLARIS_AUTHENTICATION_TOKEN_BROKER_SYMMETRIC_KEY_SECRET
               value: "password"
           volumeMounts:

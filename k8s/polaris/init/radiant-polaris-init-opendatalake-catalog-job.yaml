@@ -82,7 +82,7 @@ spec:
             # SHARED CONSTANT -- bucket `opendatalake-dev` / root `s3://opendatalake-dev/iceberg`
             # is hardcoded in four places that must agree. A mismatch surfaces as a 404
             # NoSuchBucket at Iceberg write time, not as a config error:
-            #   k8s/minio/radiant-minio-bucket-init-job.yaml       creates the bucket
+            #   k8s/rustfs/radiant-rustfs-bucket-init-job.yaml       creates the bucket
             #   k8s/polaris/init/radiant-polaris-init-opendatalake-catalog-job.yaml
             #                                                      <- here, allowedLocations
             #   docker/opendatalake-spark/Dockerfile               sed rewrite of the baked config

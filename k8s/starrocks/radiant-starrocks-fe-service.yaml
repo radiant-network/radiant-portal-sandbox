@@ -7,6 +7,14 @@ metadata:
 spec:
   type: LoadBalancer
   ports:
+    # starmgr (StarManager) RPC. The FE runs it because this cluster is shared-data
+    # (run_mode = shared_data in the FE deployment), and the CN's starlet worker calls it for every
+    # GetShard and WorkerHeartbeat. Omitting it does not fail loudly: starlet caches shard metadata
+    # in memory, so queries keep working until the CN restarts and the cache is empty -- then reads
+    # fail with "starlet err grpc.GetShard(shardId=...) error: Deadline Exceeded: BE:<id>".
+    - name: "6090"
+      port: 6090
+      targetPort: 6090
     - name: "8030"
       port: 8030
       targetPort: 8030

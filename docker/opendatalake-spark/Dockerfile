@@ -24,7 +24,7 @@ COPY target/scala-2.12/radiant-open-datalake-spark.jar /opt/app/radiant-open-dat
 # expose a dev.conf on an extra classpath dir.
 COPY src/main/resources/config/prd.conf /opt/app/conf-extra/config/dev.conf
 
-# Point storage at the sandbox MinIO bucket (opendatalake-dev). FerLab uses the iceberg StorageConf
+# Point storage at the sandbox RustFS bucket (opendatalake-dev). FerLab uses the iceberg StorageConf
 # path as the Iceberg table LOCATION, so the baked prd bucket must be rewritten or writes 404 with
 # NoSuchBucket. Use the s3:// scheme for iceberg (Iceberg S3FileIO + the Polaris allowedLocations set
 # by radiant-polaris-init-opendatalake-catalog-job expect it); raw stays s3a:// for Hadoop (and is
@@ -33,7 +33,7 @@ COPY src/main/resources/config/prd.conf /opt/app/conf-extra/config/dev.conf
 # SHARED CONSTANT -- bucket `opendatalake-dev` / root `s3://opendatalake-dev/iceberg` is hardcoded
 # in four places that must agree. A mismatch surfaces as a 404 NoSuchBucket at Iceberg write time,
 # not as a config error:
-#   k8s/minio/radiant-minio-bucket-init-job.yaml       creates the bucket
+#   k8s/rustfs/radiant-rustfs-bucket-init-job.yaml       creates the bucket
 #   k8s/polaris/init/radiant-polaris-init-opendatalake-catalog-job.yaml
 #                                                      CATALOG_WAREHOUSE / allowedLocations
 #   docker/opendatalake-spark/Dockerfile               <- here, sed rewrite of the baked config
