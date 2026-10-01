@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app: rustfs-data-volume
+  name: rustfs-data-volume
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      # Holds everything the sandbox stores: the StarRocks shared-data volume (s3://starrocks --
+      # every internal table), the Iceberg warehouse, the seed parquet/VCF, and the Open Datalake
+      # raw + iceberg trees. The MinIO claim this replaces asked for 100Mi, which was only ever
+      # survivable because minikube's hostpath provisioner does not enforce the request.
+      storage: 20Gi

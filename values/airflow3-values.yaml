@@ -56,13 +56,13 @@ extraEnv: |
   - name: AWS_SECRET_ACCESS_KEY
     value: password
   - name: AWS_ENDPOINT_URL
-    value: "http://radiant-minio:9000"
+    value: "http://radiant-rustfs:9000"
   - name: AWS_ALLOW_HTTP
     value: "true"
   - name: PYICEBERG_CATALOG__DEFAULT__URI
     value: "http://radiant-polaris:8181/api/catalog"
   - name: PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT
-    value: "http://radiant-minio:9000"
+    value: "http://radiant-rustfs:9000"
   - name: PYICEBERG_CATALOG__DEFAULT__WAREHOUSE
     value: "polaris"
   - name: PYICEBERG_CATALOG__DEFAULT__CREDENTIAL
@@ -116,3 +116,99 @@ extraEnv: |
     value: "250m"
   - name: RADIANT_TASK_OPERATOR_METADATA_MEMORY
     value: "512Mi"
+  - name: RADIANT_OPEN_DATA_USE_LEGACY_TABLES
+    value: "*"
+
+  # ---------------------------------------------------------------------------
+  # Open Datalake (radiant-open-datalake) -- the unified sandbox runs both DAG
+  # sets in this one Airflow. The AWS_* vars above are shared: they already point
+  # at radiant-rustfs, which is the Open Datalake's S3 too.
+  # ---------------------------------------------------------------------------
+  # boto3 reads AWS_DEFAULT_REGION, not AWS_REGION; the ECS/S3 hooks need it.
+  - name: AWS_DEFAULT_REGION
+    value: us-east-1
+  - name: AIRFLOW_CONN_OPENDATALAKE_S3
+    value: '{
+        "conn_type": "Amazon Web Services",
+        "login": "admin",
+        "password": "password",
+        "host": "radiant-rustfs",
+        "port": 9000,
+        "extra": {
+            "aws_access_key_id": "admin",
+            "aws_secret_access_key": "password",
+            "endpoint_url": "http://radiant-rustfs:9000",
+            "region_name": "us-east-1",
+            "aws_allow_http": true,
+            "verify": false
+        }
+    }'
+  - name: OPENDATALAKE_ENVIRONMENT
+    value: "dev"
+  # SHARED CONSTANT -- bucket `opendatalake-dev` / root `s3://opendatalake-dev/iceberg` is
+  # hardcoded in four places that must agree. A mismatch surfaces as a 404 NoSuchBucket at Iceberg
+  # write time, not as a config error:
+  #   k8s/rustfs/radiant-rustfs-bucket-init-job.yaml       creates the bucket
+  #   k8s/polaris/init/radiant-polaris-init-opendatalake-catalog-job.yaml
+  #                                                      CATALOG_WAREHOUSE / allowedLocations
+  #   docker/opendatalake-spark/Dockerfile               sed rewrite of the baked config
+  #   values/airflow3-values.yaml                        <- here
+  - name: OPENDATALAKE_RAW_BUCKET
+    value: "opendatalake-dev"
+  # Iceberg namespace + warehouse root, passed to the Spark job as --database / --warehouse.
+  # --warehouse REPLACES the storage root in the ETL config (WapETLP.withStorageRoot); the table
+  # then lands at `<warehouse>/<dataset path>`, e.g. .../reference/normalized/clinvar_v1.
+  #
+  # It MUST include the `/reference` namespace segment. Polaris derives a per-namespace location
+  # (default-base-location + namespace name) and validates table locations against THAT, not
+  # against the catalog's broader allowedLocations:
+  #     catalog   allowedLocations : s3://opendatalake-dev/iceberg
+  #     namespace reference location: s3://opendatalake-dev/iceberg/reference/   <- enforced
+  # Dropping the segment writes to .../iceberg/normalized/<table> and Polaris rejects it with
+  # "ForbiddenException: Invalid locations ... is not in the list of allowed locations".
+  # Only the scheme differs from opendatalake/lib/config.py's default: s3:// not s3a://, because
+  # the allowed locations above are s3:// and the prefix check is textual.
+  - name: OPENDATALAKE_EMR_GLUE_DATABASE
+    value: "reference"
+  - name: OPENDATALAKE_EMR_WAREHOUSE_S3
+    value: "s3://opendatalake-dev/iceberg/reference"
+  # Sandbox operator swaps (see opendatalake/operators/ in this repo).
+  - name: OPENDATALAKE_TASK_OPERATOR_KUBERNETES_NAMESPACE
+    value: radiant
+  - name: OPENDATALAKE_TASK_OPERATOR_IMAGE
+    value: "ghcr.io/radiant-network/opendatalake-airflow-task-operator:latest"
+  - name: OPENDATALAKE_SPARK_IMAGE
+    value: "ghcr.io/radiant-network/opendatalake-spark:latest"
+  # The Spark pod shares this minikube with StarRocks CN (4Gi), the FE and the Airflow pods, so it
+  # gets less than in the standalone Open Datalake sandbox. Raise together with the driver memory
+  # if an import OOMKills (exit 137).
+  - name: OPENDATALAKE_SPARK_MEMORY
+    value: "2Gi"
+  - name: OPENDATALAKE_SPARK_MEMORY_LIMIT
+    value: "3Gi"
+  - name: OPENDATALAKE_SPARK_DRIVER_MEMORY
+    value: "2g"
+  # Secrets for the download DAG, needed only by the SpliceAI and OMIM sources. Left EMPTY on
+  # purpose: SpliceAiConfig.missing() / OmimConfig.missing() treat "" as unset and raise an
+  # AirflowException naming the variable, whereas a placeholder string is sent to the remote as a
+  # real credential and comes back as an opaque auth failure. Fill in to use those two sources.
+  - name: OPENDATALAKE_SPLICEAI_ACCESS_TOKEN
+    value: ""
+  - name: OPENDATALAKE_OMIM_DOWNLOAD_KEY
+    value: ""
+  # ECS is not supported in the sandbox, but the ECS operator module is imported at DAG-parse time
+  # unless the k8s swap is applied. Kept so the DAGs parse either way.
+  - name: OPENDATALAKE_ECS_CLUSTER
+    value: "ecs-cluster"
+  - name: OPENDATALAKE_ECS_SUBNETS
+    value: "subnet-123,subnet-456"
+  - name: OPENDATALAKE_ECS_SECURITY_GROUPS
+    value: "sg-123,sg-456"
+  - name: OPENDATALAKE_TASK_OPERATOR_TASK_DEFINITION
+    value: "opendatalake-task-def"
+  - name: OPENDATALAKE_TASK_OPERATOR_LOG_GROUP
+    value: "opendatalake-ecs-logs"
+  - name: OPENDATALAKE_TASK_OPERATOR_LOG_REGION
+    value: "us-east-1"
+  - name: OPENDATALAKE_TASK_OPERATOR_LOG_PREFIX
+    value: "opendatalake"

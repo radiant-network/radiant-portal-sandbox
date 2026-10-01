@@ -38,7 +38,12 @@ spec:
                 - sh
                 - -c
                 - '/usr/bin/mysql -u root -h radiant-starrocks-fe -P 9030 -e "SHOW COMPUTE NODES\G" |grep "Alive: true"'
-            failureThreshold: 3
+            # The probe asks the FE whether this CN has registered, so it cannot pass until BOTH are
+            # up. Without initialDelaySeconds it starts at t=0 and, at 3 x 10s, allowed only 30s --
+            # less than the 15s sleep in the start command above plus CN boot plus the FE's own cold
+            # start. Every `minikube start` therefore killed the CN mid-boot (exit 137) and looped.
+            initialDelaySeconds: 120
+            failureThreshold: 5
             periodSeconds: 10
             timeoutSeconds: 5
           name: radiant-starrocks-cn
@@ -57,5 +62,16 @@ spec:
             requests:
               cpu: "2"
               memory: 4Gi
+            limits:
+              # A memory LIMIT is required, not just a request. cn.conf sets no mem_limit, so
+              # StarRocks sizes its own budget from detected system memory -- and with no cgroup
+              # limit that is the whole node (15.6GiB), so the CN believes it may use ~14GB while
+              # the FE, Airflow, Postgres, RustFS, Polaris, Keycloak and api/ui/worker share the same
+              # node. It allocates toward that figure, the kernel OOM-kills it (exit 137,
+              # Reason: OOMKilled), kubelet restarts it, the query retries, and it crash-loops.
+              #
+              # With a limit set, StarRocks reads the cgroup value and self-throttles: an oversized
+              # query fails with "Memory limit exceeded" instead of taking the CN down with it.
+              memory: 6Gi
       hostname: radiant-starrocks-cn
       restartPolicy: Always

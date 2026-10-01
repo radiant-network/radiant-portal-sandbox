@@ -26,7 +26,7 @@ spec:
                 (
                   'enabled' = 'true',
                   'aws.s3.region' = 'us-east-1',
-                  'aws.s3.endpoint' = 'http://radiant-minio:9000',
+                  'aws.s3.endpoint' = 'http://radiant-rustfs:9000',
                   'aws.s3.access_key' = 'admin',
                   'aws.s3.secret_key' = 'password',
                   'aws.s3.enable_partitioned_prefix' = 'true'
@@ -40,7 +40,7 @@ spec:
               echo 'Create radiant iceberg catalog...' && \
               mysql -h radiant-starrocks-fe -P 9030 -u root -e "
                 CREATE EXTERNAL CATALOG 'radiant_iceberg_catalog'
-                COMMENT 'External catalog to Apache Iceberg on MinIO'
+                COMMENT 'External catalog to Apache Iceberg on RustFS'
                 PROPERTIES
                 (
                 'type'='iceberg',
@@ -53,7 +53,7 @@ spec:
                 'aws.s3.region'='us-east-1',
                 'aws.s3.access_key'='admin',
                 'aws.s3.secret_key'='password',
-                'aws.s3.endpoint'='http://radiant-minio:9000',
+                'aws.s3.endpoint'='http://radiant-rustfs:9000',
                 'aws.s3.enable_path_style_access'='true',
                 'iceberg.catalog.vended-credentials-enabled'='false',
                 'client.factory'='com.starrocks.connector.share.iceberg.IcebergAwsClientFactory'

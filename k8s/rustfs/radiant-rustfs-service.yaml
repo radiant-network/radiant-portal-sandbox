@@ -2,16 +2,16 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app: radiant-minio
-  name: radiant-minio
+    app: radiant-rustfs
+  name: radiant-rustfs
 spec:
   type: LoadBalancer
   ports:
-    - name: "9001"
-      port: 9001
-      targetPort: 9001
     - name: "9000"
       port: 9000
       targetPort: 9000
+    - name: "9001"
+      port: 9001
+      targetPort: 9001
   selector:
-    app: radiant-minio
+    app: radiant-rustfs

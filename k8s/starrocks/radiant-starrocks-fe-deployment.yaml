@@ -34,7 +34,7 @@ spec:
               echo 'cloud_native_storage_type = S3' >> /opt/starrocks/fe/conf/fe.conf
               echo 'aws_s3_path = starrocks/' >> /opt/starrocks/fe/conf/fe.conf
               echo 'aws_s3_region = us-east-1' >> /opt/starrocks/fe/conf/fe.conf
-              echo 'aws_s3_endpoint = http://radiant-minio:9000' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'aws_s3_endpoint = http://radiant-rustfs:9000' >> /opt/starrocks/fe/conf/fe.conf
               echo 'aws_s3_access_key = admin' >> /opt/starrocks/fe/conf/fe.conf
               echo 'aws_s3_secret_key = password' >> /opt/starrocks/fe/conf/fe.conf
               echo 'enable_udf = true' >> /opt/starrocks/fe/conf/fe.conf
@@ -46,6 +46,10 @@ spec:
                 - sh
                 - -c
                 - '/usr/bin/mysql -u root -h radiant-starrocks-fe -P 9030 -e "SHOW FRONTENDS\\G" | grep "Alive: true"'
+            # Same reasoning as the CN probe: no initialDelaySeconds means the clock starts at t=0.
+            # 10 x 10s is usually enough for a warm start but was not on a loaded node, so the FE was
+            # killed mid-boot too. The delay covers the shared-data fe.conf rewrite plus FE startup.
+            initialDelaySeconds: 90
             failureThreshold: 10
             periodSeconds: 10
             timeoutSeconds: 5
