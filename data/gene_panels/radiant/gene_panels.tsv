@@ -1,0 +1,36 @@
+symbol	Cardiac arrhythmia	Cardiomyopathy	Hemoglobinopathy	Retinal dystrophy	Hereditary cancer	Monogenic diabetes
+KCNQ1	true	false		false		false
+KCNE3	true		false		false	
+KCNJ5	true	false		false		false
+SCN2B	true		false		false	
+SCN3B	true	false		false		false
+SCN4B	true		false		false	
+MYBPC3	false	true		false		false
+CSRP3		true	false		false	
+CRYAB	false	true		false		false
+ILK		true	false		false	
+HBB	false		true	false		false
+HBD		false	true		false	
+HBG1	false		true	false		false
+HBG2		false	true		false	
+HBE1	false		true	false		false
+BEST1		false		true	false	
+ROM1	false		false	true		false
+MYO7A		false		true	false	
+USH1C	false		false	true		false
+MFRP		false		true	false	
+C1QTNF5	false		false	true		false
+TUB		false		true	false	
+ATM	false		false		true	false
+MEN1		false		false	true	
+WT1	false		false		true	false
+SDHD		false		false	true	
+SDHAF2	false		false		true	false
+MRE11		false		false	true	
+AIP	false		false		true	false
+CDKN1C		false		false	true	
+NOTAGENE1	false		false		true	false
+ABCC8		false		false		true
+INS	false		false		false	true
+KCNJ11		false		false		true
+GHOST1						true

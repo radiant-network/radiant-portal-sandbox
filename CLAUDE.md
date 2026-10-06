@@ -188,7 +188,7 @@ resource resolution, so it fails with `connection refused` when Minikube is down
 # System python3 has no pyyaml; the sibling pipeline venv does.
 PY=../radiant-portal-pipeline/.venv/bin/python
 
-# Parse manifests and Helm values. NOTE the repo mixes extensions -- 29 .yaml and 5 .yml
+# Parse manifests and Helm values. NOTE the repo mixes extensions -- 32 .yaml and 5 .yml
 # (k8s/api/, k8s/ui/, k8s/polaris/deploy/configs.yml), so a `*.yaml` glob silently skips five files.
 $PY -c "import yaml,sys; [list(yaml.safe_load_all(open(f))) for f in sys.argv[1:]]" \
   $(git ls-files '*.yaml' '*.yml' | grep -v '^\.github')
@@ -199,7 +199,7 @@ $PY -c "
 import json,yaml
 env=yaml.safe_load(yaml.safe_load(open('values/airflow3-values.yaml'))['extraEnv'])
 names=[e['name'] for e in env]; assert len(names)==len(set(names)), 'duplicate env names'
-json.loads(next(e['value'] for e in env if e['name']=='AIRFLOW_CONN_OPENDATALAKE_S3'))"
+[json.loads(next(e['value'] for e in env if e['name']==n)) for n in ('AIRFLOW_CONN_OPENDATALAKE_S3','AIRFLOW_CONN_RADIANT_API_CONN')]"
 
 # Shell lives inside ConfigMaps and Job command blocks -- extract, then syntax-check
 $PY -c "
@@ -216,7 +216,7 @@ unreachable host with a low attempt cap and confirm it exits non-zero instead of
 
 - **Manifests are the contract.** Most work is YAML tweaks under `k8s/*/` or `values/`. Image tags and env vars (`RADIANT_TASK_OPERATOR_IMAGE`, `OPENDATALAKE_SPARK_IMAGE`) are the usual knobs.
 - **Version pins live in two places.** The Airflow image tag is set in both `docker/airflow3/Dockerfile` (`apache/airflow:3.2.1-python3.12`, plus `requirements-airflow.txt` and the matching `constraints-python3.12.txt`) and `values/airflow3-values.yaml` (`defaultAirflowTag`, `airflowVersion`, `images.airflow.tag`). Bumping one alone silently deploys the wrong image. Same pattern for StarRocks `4.0.13` across the FE, CN, and init manifests.
-- **Locally-built images must exist before deploy.** `radiant-airflow3`, `radiant-airflow-task-operator`, and `radiant-airflow-dbt-operator` are built into Minikube's docker daemon, never pulled. Tags in `values/airflow3-values.yaml` must match the tags used at build time.
+- **Locally-built images must exist before deploy.** `radiant-airflow3`, `radiant-airflow-task-operator`, `radiant-airflow-dbt-operator`, and `radiant-local-toolbox` are built into Minikube's docker daemon, never pulled. Tags in `values/airflow3-values.yaml` must match the tags used at build time. `ghcr.io/radiant-network/radiant-toolbox` is not pullable anonymously, so the toolbox is built from `../radiant-portal/backend/toolbox.Dockerfile` (context `../radiant-portal/backend`).
 - **Airflow memory tuning is coupled.** `RADIANT_PARQUET_FILE_SIZE_MB` (64MB, down from the 500MB default) is what makes the SNV extraction pods fit in `RADIANT_TASK_OPERATOR_SNV_MEMORY_LIMIT: 1Gi`. Raise one and you must raise the other, or tasks OOMKill (exit 137). Sandbox-only — the 500MB default sits just under Iceberg's `WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT` and lowering it in a real deployment produces many small parquet files.
 - **Don't change install order** unless the dependency assumptions in the init jobs change with it (e.g. `polaris-init-tables` waits on the catalog job, which waits on Postgres + Polaris; RustFS must already hold the seed parquet).
 - **Airflow 3 only.** `values/airflow2-values.yaml` was removed in `614fa5e`; the Airflow 2 path is gone.
@@ -227,6 +227,8 @@ unreachable host with a low attempt cap and confirm it exits non-zero instead of
 
 ## Known state
 
+- **Toolbox DAG wiring.** The pipeline's `Toolbox` K8s operator (`radiant/dags/operators/k8s.py`) reads its image from `RADIANT_TOOLBOX_OPERATOR_IMAGE` and its whole env via `envFrom` from secret `radiant-toolbox-secret` (`k8s/toolbox/`). An unset image is not a config error — the pod is submitted with no `image` and the API server rejects it with `422 … spec.containers[0].image: Required value`. The secret mirrors the API's `DB_*`/`PG*` env in `k8s/api/radiant-api-deployments.yml`; keep them in sync. There is no Ranger here, so `refresh-tenants` applies views and gene panel MVs and then fails at `refresh masking policies` — expected, like the Ranger steps of `create-tenant`/`create-user`.
+- **A failed `helm install` skips the Airflow user.** `createUserJob` is a post-install hook, so an install that times out (e.g. `ImagePullBackOff` because a local image wasn't built yet) leaves the release `failed` and FAB with no users — every login is "invalid". `airflow users list` shows `No data found`. Fix with `helm upgrade` using the same values, which re-runs the hook and clears the `failed` status.
 - The final step of `Radiant - Scheduled Import` is expected to fail. It triggers `Radiant - Data Integrity Checks`, which flags the deliberately imperfect sandbox data.
 - **The object store is RustFS, and there is no vendor client.** It replaced MinIO, whose Docker Hub repositories (`docker.io/minio/minio`, `docker.io/minio/mc`) stopped serving anonymous pulls — *every* tag, `latest` included, 401s as ``pull access denied … repository does not exist or may require `docker login` ``, which reads like a typo'd tag but is not. `docker.io/rustfs/rustfs` has no such restriction. Everything here talks plain S3, so the bucket-init job and the seeding step both use `amazon/aws-cli` rather than a vendor CLI; don't reintroduce `mc`. RustFS config is env-driven (`RUSTFS_VOLUMES` is **required** — there is no positional `server /data` argument), it serves `/health` and `/health/ready` on the S3 port rather than MinIO's `/minio/health/live`, and it defaults to credentials `rustfsadmin`/`rustfsadmin`, which the deployment overrides to the sandbox's `admin`/`password`.
 - `aws … | tail` makes `$?` the exit status of `tail`, so a failed copy still looks like success. Check the bucket rather than the pipeline's exit code: `aws s3 ls --recursive s3://<bucket>/ | wc -l`.

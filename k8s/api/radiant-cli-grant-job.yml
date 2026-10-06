@@ -1,0 +1,71 @@
+# Grants the radiant-cli service account (the identity of the Airflow connection radiant_api_conn)
+# its portal role in tenant `radiant`, so the DAGs that call the API do not get 403.
+#
+# user_id is the fixed id of `service-account-radiant-cli` in
+# k8s/keycloak/keycloak-realm-import-configmap.yaml: the portal keys users by the token `sub`.
+# tenant_admin holds can_manage_analysis_catalog (portal migration 000041), which the gene panel
+# import needs. data_manager at every organization ('*') holds can_ingest_data, which the case
+# registration needs. The job waits for the API to apply migration 000041, then is idempotent.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: radiant-cli-grant-scripts
+data:
+  grant.sql: |
+    INSERT INTO public.users (user_id) VALUES ('4b14be22-2b89-488a-87a3-755b2ff81545')
+    ON CONFLICT (user_id) DO NOTHING;
+
+    INSERT INTO public.user_role (user_id, tenant_code, org_code, role_code)
+    SELECT '4b14be22-2b89-488a-87a3-755b2ff81545', 'radiant', NULL, 'tenant_admin'
+    WHERE NOT EXISTS (
+        SELECT 1 FROM public.user_role
+        WHERE user_id = '4b14be22-2b89-488a-87a3-755b2ff81545'
+          AND tenant_code = 'radiant' AND role_code = 'tenant_admin' AND org_code IS NULL
+    );
+
+    INSERT INTO public.user_role (user_id, tenant_code, org_code, role_code)
+    SELECT '4b14be22-2b89-488a-87a3-755b2ff81545', 'radiant', '*', 'data_manager'
+    WHERE NOT EXISTS (
+        SELECT 1 FROM public.user_role
+        WHERE user_id = '4b14be22-2b89-488a-87a3-755b2ff81545'
+          AND tenant_code = 'radiant' AND role_code = 'data_manager' AND org_code = '*'
+    );
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: radiant-cli-grant-job
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: wait-for-api-migrations
+          image: postgres:13
+          env:
+            - name: PGPASSWORD
+              value: "postgres"
+          command:
+            - sh
+            - -c
+            - |
+              until psql -h postgres -U postgres -d radiant -tAc \
+                "SELECT 1 FROM public.role_action WHERE tenant_code = 'radiant' AND role_code = 'tenant_admin' AND action_code = 'can_manage_analysis_catalog'" \
+                2>/dev/null | grep -q 1; do
+                echo waiting for the API migrations; sleep 5
+              done
+      containers:
+        - name: psql
+          image: postgres:13
+          env:
+            - name: PGPASSWORD
+              value: "postgres"
+          command: ["psql"]
+          args: ["-h", "postgres", "-U", "postgres", "-d", "radiant", "-v", "ON_ERROR_STOP=1", "-f", "/scripts/grant.sql"]
+          volumeMounts:
+            - name: grant-scripts
+              mountPath: /scripts
+      restartPolicy: OnFailure
+      volumes:
+        - name: grant-scripts
+          configMap:
+            name: radiant-cli-grant-scripts
