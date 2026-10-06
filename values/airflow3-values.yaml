@@ -81,12 +81,29 @@ extraEnv: |
     value: "mysql://root@radiant-starrocks-fe:9030/radiant"
   - name: AIRFLOW_CONN_RADIANT_POSTGRES_CONN
     value: "postgresql://postgres:postgres@postgres:5432/radiant"
+  # Portal API, for the DAGs that call it (gene panel import, case registration). login/password
+  # are the radiant-cli Keycloak client (k8s/keycloak/keycloak-realm-import-configmap.yaml). The
+  # token issuer (KC_HOSTNAME radiant-keycloak:8282) matches the API's KEYCLOAK_HOST.
+  - name: AIRFLOW_CONN_RADIANT_API_CONN
+    value: '{
+        "conn_type": "http",
+        "host": "http://radiant-api:8090",
+        "login": "radiant-cli",
+        "password": "This1sMyS3cr3t!",
+        "extra": {
+            "token_url": "http://radiant-keycloak:8282/realms/Radiant/protocol/openid-connect/token"
+        }
+    }'
   - name: RADIANT_TASK_OPERATOR_KUBERNETES_NAMESPACE
     value: radiant
   - name: RADIANT_TASK_OPERATOR_IMAGE
     value: "ghcr.io/radiant-network/radiant-airflow-task-operator:latest"
   - name: RADIANT_DBT_OPERATOR_IMAGE
     value: "ghcr.io/radiant-network/radiant-airflow-dbt-operator:latest"
+  # Built locally from ../radiant-portal/backend/toolbox.Dockerfile; not pullable from ghcr.
+  # Env comes from k8s/toolbox/radiant-toolbox-secret.yaml.
+  - name: RADIANT_TOOLBOX_OPERATOR_IMAGE
+    value: "radiant-local-toolbox:latest"
   - name: RADIANT_TASK_OPERATOR_PYTHONPATH
     value: "/opt/radiant"
   - name: RADIANT_DBT_S3_WORKSPACE

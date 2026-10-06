@@ -111,12 +111,15 @@ export AWS_ENDPOINT_URL=http://127.0.0.1:9000
 aws s3 sync data/input_parquet/ s3://warehouse/input_parquet/
 aws s3 sync data/vcf/germline/ s3://vcf/
 aws s3 sync data/vcf/somatic/ s3://vcf/
+aws s3 sync data/gene_panels/ s3://warehouse/gene_panels/ --exclude "*.md"
 ```
 
-Verify — expect 35 objects under `warehouse/input_parquet/` and 20 under `vcf/`:
+Verify — expect 35 objects under `warehouse/input_parquet/`, 20 under `vcf/` and 1 under
+`warehouse/gene_panels/` (see [data/gene_panels/README.md](data/gene_panels/README.md) to load it in the portal):
 ```
 aws s3 ls --recursive s3://warehouse/input_parquet/ | wc -l
 aws s3 ls --recursive s3://vcf/ | wc -l
+aws s3 ls --recursive s3://warehouse/gene_panels/ | wc -l
 ```
 
 `AWS_ENDPOINT_URL` is honoured by AWS CLI v2.22 and later. On an older CLI, pass
@@ -173,6 +176,10 @@ radiant-keycloak-b544d74bb-wk5zv         1/1     Running     0          53s
 ```
 kubectl apply -f k8s/api/
 ```
+
+This also starts `radiant-cli-grant-job`: once the API has applied its migrations, it grants the
+`radiant-cli` service account (Airflow's `radiant_api_conn`) the `tenant_admin` role and the `data_manager`
+role at every organization (`*`) in tenant `radiant`.
 
 ## Monitor API pod is running (1 minutes)
 ```
@@ -254,6 +261,30 @@ docker build -t ghcr.io/radiant-network/radiant-airflow-dbt-operator:latest -f D
 ```
 
 **Important note:** Ensure the image's name and tag matches with the `RADIANT_TASK_OPERATOR_IMAGE` from the `values/airflow3-values.yaml` file.
+
+## Pre-building the Radiant toolbox image and secret
+
+The `Radiant - Toolbox` DAG (`create-tenant`, `create-user`, `refresh-tenants`) launches a pod from
+the radiant-portal backend's toolbox image. It is not pullable from ghcr, so build it locally.
+From this repository, with `radiant-portal` cloned next to it:
+
+```
+eval $(minikube -p minikube docker-env)  # To ensure the image is built inside minikube's docker environment
+docker build -t radiant-local-toolbox:latest \
+  -f ../radiant-portal/backend/toolbox.Dockerfile ../radiant-portal/backend
+```
+
+The tag must match `RADIANT_TOOLBOX_OPERATOR_IMAGE` in `values/airflow3-values.yaml`.
+
+Then apply the secret the pod reads its StarRocks and Postgres settings from:
+
+```
+kubectl apply -f k8s/toolbox/
+```
+
+> There is no Ranger in the sandbox. `refresh-tenants` refreshes the tenant views and gene panel
+> MVs, then fails at `refresh masking policies` — that failure is expected. The Ranger steps of
+> `create-tenant` and `create-user` fail the same way.
 
 > **Testing the Open Data Lake integration?** Build its two images now as well, and apply the
 > operator swaps — both before the Airflow install below. See
