@@ -6,16 +6,17 @@ full list of the tenant's panels: each upload replaces the previous one.
 
 ## Format
 
-UTF-8 TSV, one gene per row, one panel per column:
+UTF-8 TSV, one gene per row, with a header row:
 
 ```
-symbol	Cardiac arrhythmia	Cardiomyopathy	...
-KCNQ1	true	false	...
+symbol	panels	version
+KCNQ1	CARDIAC_ARRHYTHMIA,HEREDITARY_CANCER	CARDIAC_ARRHYTHMIA_v1,HEREDITARY_CANCER_v1
 ```
 
-- **First column:** the gene symbol, one per row. There is no Ensembl ID column.
-- **Header of each following column:** the panel name. The portal derives the panel code from the name.
-- **Cells:** `true` if the gene is in the panel, `false` if it is not. An empty cell is the same as `false`.
+- **`symbol`:** the gene symbol, one per row.
+- **`panels`:** the comma-separated codes of the panels the gene is in. A code the tenant already has (any case)
+  gets the genes of the file and keeps its name; a new code creates a panel named by its code.
+- **`version`:** ignored by the portal (optional).
 
 ## `radiant/gene_panels.tsv`
 
@@ -24,29 +25,30 @@ KCNQ1	true	false	...
 
 | Panel | Genes |
 |---|---|
-| Cardiac arrhythmia | 6 |
-| Cardiomyopathy | 4 |
-| Hemoglobinopathy | 5 |
-| Retinal dystrophy | 7 |
-| Hereditary cancer | 9 |
-| Monogenic diabetes | 4 |
+| CARDIAC_ARRHYTHMIA | 6 |
+| CARDIOMYOPATHY | 4 |
+| HEMOGLOBINOPATHY | 5 |
+| RETINAL_DYSTROPHY | 7 |
+| HEREDITARY_CANCER | 10 |
+| MONOGENIC_DIABETES | 4 |
 
 Rows that test the edge cases:
 
 | Line | Row | Purpose |
 |---|---|---|
-| 32 | `NOTAGENE1` (Hereditary cancer) | symbol matches no Ensembl gene: the row is skipped with a warning, or rejected with `strict` |
-| 36 | `GHOST1` (Monogenic diabetes) | symbol matches no Ensembl gene: same as line 32 |
-
-Half of the non-member cells are `false` and half are empty (every second one, in file order), so both spellings
-of "not in the panel" are tested in every panel column.
+| 2 | `KCNQ1` (CARDIAC_ARRHYTHMIA, HEREDITARY_CANCER) | one gene in two panels (both 11p15 / Beckwith-Wiedemann region) |
+| 32 | `NOTAGENE1` (HEREDITARY_CANCER) | symbol matches no Ensembl gene: the row is skipped with a warning, or rejected with `strict` |
+| 36 | `GHOST1` (MONOGENIC_DIABETES) | symbol matches no Ensembl gene: same as line 32 |
 
 Expected answers:
 
 | `strict` | Result |
 |---|---|
-| `false` | 200, `{"panels": 6, "genes": 33, "warnings": [2 rows]}` |
+| `false` | 200, `{"panels": 6, "genes": 34, "warnings": [2 rows]}` |
 | `true` | 422, nothing changed, the two unmatched rows (lines 32, 36) in `detail.warnings` |
+
+The facet shows the panel codes as names (`CARDIAC_ARRHYTHMIA`, …): the sandbox has no analysis catalog panel with
+these codes.
 
 ## Run it
 
