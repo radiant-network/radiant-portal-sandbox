@@ -29,6 +29,8 @@ postgres ────────────┤  (DBs: airflow, radiant, polari
    │              radiant_jdbc -> postgres/radiant; a second job adds
    │              opendatalake_catalog -> polaris catalog `opendatalake`)
    ├─> keycloak (realm `Radiant` imported from configmap)
+   ├─> ranger (OPTIONAL, admin only; creates its own DB in postgres, registers service
+   │           `starrocks`; policies are not enforced -- StarRocks keeps native access control)
    │
    ├─> api  (needs starrocks FE + postgres + keycloak)
    ├─> worker (needs postgres + rustfs)
@@ -52,6 +54,7 @@ Everything talks over in-cluster service DNS on the `radiant` namespace. Credent
 | StarRocks FE | `radiant-starrocks-fe` | 9030 mysql / 8030 http / 9020 thrift / 6090 starmgr | `root`, no password |
 | StarRocks CN | `radiant-starrocks-cn` | 9050 heartbeat | — |
 | Keycloak | `radiant-keycloak` | 8282 | admin `admin`/`admin`, realm `Radiant`, client `radiant` |
+| Ranger admin | `radiant-ranger` | 6080 | `admin` / `rangerR0cks!`; own DB `ranger` / `rangeradmin` in Postgres |
 | API | `radiant-api` | 8090 | — |
 | UI | `radiant-portal-ui` | 3000 | — |
 
@@ -227,7 +230,7 @@ unreachable host with a low attempt cap and confirm it exits non-zero instead of
 
 ## Known state
 
-- **Toolbox DAG wiring.** The pipeline's `Toolbox` K8s operator (`radiant/dags/operators/k8s.py`) reads its image from `RADIANT_TOOLBOX_OPERATOR_IMAGE` and its whole env via `envFrom` from secret `radiant-toolbox-secret` (`k8s/toolbox/`). An unset image is not a config error — the pod is submitted with no `image` and the API server rejects it with `422 … spec.containers[0].image: Required value`. The secret mirrors the API's `DB_*`/`PG*` env in `k8s/api/radiant-api-deployments.yml`; keep them in sync. There is no Ranger here, so `refresh-tenants` applies views and gene panel MVs and then fails at `refresh masking policies` — expected, like the Ranger steps of `create-tenant`/`create-user`.
+- **Toolbox DAG wiring.** The pipeline's `Toolbox` K8s operator (`radiant/dags/operators/k8s.py`) reads its image from `RADIANT_TOOLBOX_OPERATOR_IMAGE` and its whole env via `envFrom` from secret `radiant-toolbox-secret` (`k8s/toolbox/`). An unset image is not a config error — the pod is submitted with no `image` and the API server rejects it with `422 … spec.containers[0].image: Required value`. The secret mirrors the API's `DB_*`/`PG*` env in `k8s/api/radiant-api-deployments.yml`; keep them in sync. The `RANGER_*` values point at the optional Ranger admin in `k8s/ranger/`. They stay set whether or not it is deployed: nothing contacts Ranger at startup, the clients are lazy. Without it, `refresh-tenants`, `create-tenant`, `create-user` and the portal's add-member (`POST /{tenant}/users`) fail at their Ranger step with `connection refused` / `no such host`, after the Keycloak/StarRocks/Postgres work is already done. Making Ranger skippable in code was rejected: the fix is to deploy it, not to touch `radiant-portal`.
 - **A failed `helm install` skips the Airflow user.** `createUserJob` is a post-install hook, so an install that times out (e.g. `ImagePullBackOff` because a local image wasn't built yet) leaves the release `failed` and FAB with no users — every login is "invalid". `airflow users list` shows `No data found`. Fix with `helm upgrade` using the same values, which re-runs the hook and clears the `failed` status.
 - The final step of `Radiant - Scheduled Import` is expected to fail. It triggers `Radiant - Data Integrity Checks`, which flags the deliberately imperfect sandbox data.
 - **The object store is RustFS, and there is no vendor client.** It replaced MinIO, whose Docker Hub repositories (`docker.io/minio/minio`, `docker.io/minio/mc`) stopped serving anonymous pulls — *every* tag, `latest` included, 401s as ``pull access denied … repository does not exist or may require `docker login` ``, which reads like a typo'd tag but is not. `docker.io/rustfs/rustfs` has no such restriction. Everything here talks plain S3, so the bucket-init job and the seeding step both use `amazon/aws-cli` rather than a vendor CLI; don't reintroduce `mc`. RustFS config is env-driven (`RUSTFS_VOLUMES` is **required** — there is no positional `server /data` argument), it serves `/health` and `/health/ready` on the S3 port rather than MinIO's `/minio/health/live`, and it defaults to credentials `rustfsadmin`/`rustfsadmin`, which the deployment overrides to the sandbox's `admin`/`password`.

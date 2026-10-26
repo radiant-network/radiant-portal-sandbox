@@ -203,6 +203,47 @@ Results 1 pod running :
 radiant-keycloak-b544d74bb-wk5zv         1/1     Running     0          53s
 ```
 
+## Install Ranger (optional)
+
+The API and the toolbox commands (`create-user`, `create-tenant`, `refresh-tenants`) call the Ranger
+admin API when they provision users, tenant roles and PII masking policies. Ranger is optional:
+skip this step and the rest of the stack works the same, browsing cases and variants included. Only
+the Ranger step of those operations fails, **after** their other work is done:
+
+| Without Ranger | What still happens | What fails |
+|---|---|---|
+| Adding a member in the portal | Keycloak user, StarRocks user and portal roles are created | the request returns a 500 |
+| `create-user` | same as above | exits with an error |
+| `refresh-tenants` | tenant views and gene panel MVs are refreshed | masking policies |
+
+The error then reads `ranger: … dial tcp …:6080: connect: connection refused` (or `no such host`).
+Install Ranger if you work on user or tenant administration, or want those operations to succeed.
+
+The image is the one radiant-portal's local stack uses, run as a single pod. It creates its own
+`ranger` database and `rangeradmin` role in the sandbox Postgres, so install it after Postgres.
+```
+kubectl apply -f k8s/ranger/
+```
+
+The policies are created in Ranger but **not enforced**: StarRocks keeps its native access control,
+so queries are neither masked nor filtered.
+
+## Monitor Ranger pod is running (3 minutes)
+```
+kubectl get po | grep ranger
+kubectl logs deploy/radiant-ranger | grep register
+```
+Results 1 pod running, and the `starrocks` service registered:
+```
+radiant-ranger-84f496dd7-qk87k           1/1     Running     0          3m29s
+[register] service-def 'starrocks' created (from starrocks.json)
+[register] service 'starrocks' created (from starrocks.json)
+```
+
+The Ranger console is at http://localhost:6080 (`admin` / `rangerR0cks!`). The pod takes about
+1 GiB of memory. If the VM runs short during a large import, scale it down meanwhile with
+`kubectl scale deploy/radiant-ranger --replicas=0`.
+
 ## Install API
 ```
 kubectl apply -f k8s/api/
@@ -319,9 +360,9 @@ Then apply the secret the pod reads its StarRocks and Postgres settings from:
 kubectl apply -f k8s/toolbox/
 ```
 
-> There is no Ranger in the sandbox. `refresh-tenants` refreshes the tenant views and gene panel
-> MVs, then fails at `refresh masking policies` — that failure is expected. The Ranger steps of
-> `create-tenant` and `create-user` fail the same way.
+> `refresh-tenants`, `create-tenant` and `create-user` also write to Ranger. Without it (see
+> [Install Ranger (optional)](#install-ranger-optional)) they fail at their Ranger step, once the
+> rest of their work is done.
 
 > **Testing the Open Data Lake integration?** Build its two images now as well, and apply the
 > operator swaps — both before the Airflow install below. See

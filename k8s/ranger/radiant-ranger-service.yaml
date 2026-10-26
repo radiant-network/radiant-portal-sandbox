@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: radiant-ranger
+  labels:
+    app: radiant-ranger
+spec:
+  type: LoadBalancer
+  selector:
+    app: radiant-ranger
+  ports:
+    - name: http
+      port: 6080
+      targetPort: 6080
