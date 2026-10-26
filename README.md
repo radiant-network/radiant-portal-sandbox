@@ -30,6 +30,11 @@ minikube config set cpus 4
 minikube config set container-runtime docker
 ```
 
+4 CPUs is the minimum, and the stack saturates them during an import: the load reaches 10 to 23,
+and the kubelet restarts Airflow components (and, before its probe was fixed, Postgres) whose
+liveness probes time out. If Docker has more to give, set `cpus 6` instead. The pool sizes under
+[Configure airflow](#configure-airflow) are what keep an import working on 4.
+
 **The container runtime must be `docker`.** Every image in this sandbox is built with
 `eval $(minikube docker-env) && docker build …`, which needs a real Docker Engine inside the VM.
 With the `containerd` runtime, `docker-env` points at a compatibility shim and every build fails with:
@@ -420,10 +425,20 @@ Connect to the Airflow UI at http://localhost:8080
 
 Then Unpause all the dags by sliding the toggle button of each dag to the right.
 
+Don't skip the ones you never trigger yourself. `Radiant - Scheduled Import` (`radiant-import`)
+triggers `radiant-import-part`, which triggers `radiant-import-snv-vcf`, then
+`radiant-data-integrity-starrocks`, and waits for each. A paused child leaves its run `queued` until
+the parent times out and fails at `import_part`. None of them has a schedule, so unpausing them
+triggers nothing:
+```
+kubectl exec deploy/airflow-scheduler -c scheduler -- sh -c \
+  'for d in radiant-import radiant-import-part radiant-import-snv-vcf radiant-data-integrity-starrocks; do airflow dags unpause $d -y; done'
+```
+
 Configure the pools :
 - Go to Admin -> Pools
 - Create a new pool named "import_part" with 1 slot
-- Create a new pool named "import_vcf" with 128 slots
+- Create a new pool named "import_vcf" with 2 slots (see below)
 - Create a new pool named "starrocks_insert_pool" with 1 slot **and "Include deferred tasks"
   ticked** — see below
 
@@ -432,6 +447,12 @@ Only if you are testing the Open Data Lake integration, create these three as we
 - `opendatalake_download_tasks_pool`
 - `opendatalake_direct_upload_tasks_pool`
 - `opendatalake_import_tasks_pool`
+
+`import_vcf` caps how many VCF extraction pods run at once. Deployed environments use 128; keep
+2 here. Each pod requests 500m CPU with no limit, and pyarrow/cyvcf2 use every core they get, so
+with 128 slots the five sample pods start together on 4 CPUs. The load then passes 13, Airflow's
+own liveness probes time out, and the kubelet restarts the scheduler and worker mid-import, which
+fails every extraction task. With 2 slots the extraction takes about 8 minutes.
 
 `starrocks_insert_pool` serialises the StarRocks statements in `Radiant - Re-annotate against
 OpenDataLake`. All three of its settings matter, and the **"Include deferred tasks"** checkbox is
@@ -447,7 +468,7 @@ From the CLI instead of the UI:
 kubectl exec deploy/airflow-scheduler -c scheduler -- \
   airflow pools set import_part 1 "Serialise import_part"
 kubectl exec deploy/airflow-scheduler -c scheduler -- \
-  airflow pools set import_vcf 128 "VCF import fan-out"
+  airflow pools set import_vcf 2 "VCF import fan-out (2 in the sandbox: 4 CPUs)"
 kubectl exec deploy/airflow-scheduler -c scheduler -- \
   airflow pools set starrocks_insert_pool 1 "Serialise StarRocks inserts" --include-deferred
 
@@ -466,6 +487,7 @@ Trigger the following dags in order. Each dag takes a few minutes to run. Wait f
 1. Trigger dag `[QA] Radiant - Init Simulated Clinical Data`
    - Set vcf_bucket_prefix to `s3://vcf`
 2. Trigger dag `Radiant - Init StarRocks Base Tables` (~ 2 minutes)
+   - Set `udf_release_version` to `v2.0.0`. **Do not keep the default `v1.2.0`** (see below).
 3. Trigger dag  `Radiant - Init Iceberg Tables` (~ 1 minutes)
 4. Trigger dag `Radiant - Import Open Data` (~ 5 minutes)
    - Leave `skip_legacy_tables` unchecked.
@@ -474,6 +496,74 @@ Trigger the following dags in order. Each dag takes a few minutes to run. Wait f
 5. Trigger dag `Radiant - Scheduled Import` (~ 5 minutes)
 
 The last step of Radiant - Scheduled Import will fail — this is expected: it triggers Radiant - Data Integrity Checks, which flags the (deliberately imperfect) sandbox test data.
+
+### `udf_release_version` must be `v2.0.0`
+
+`Init StarRocks Base Tables` installs the StarRocks UDFs `GET_VARIANT_ID` and `GET_CNV_ID` from
+[radiant-starrocks-udf](https://github.com/radiant-network/radiant-starrocks-udf) releases. The
+CNV insert now passes the resolved CNV type (`LOSS`, `GAIN`) to `GET_CNV_ID`, which only v2.0.0
+understands; v1.2.0 only knows the VCF alternate (`<DEL>`) and returns `NULL` for `LOSS`. The DAG
+still defaults to `v1.2.0`, so with the default the germline CNV insert fails with:
+```
+Insert has filtered data ... NULL value in non-nullable column 'cnv_id'
+```
+(read the rejected rows with the `select tracking_log from information_schema.load_tracking_logs
+where job_id=...` query printed in the task log). v2.0.0 changes nothing for `GET_VARIANT_ID`.
+
+To fix an already-initialised sandbox without re-running the DAG, replace the function with the
+DAG's own statement (`radiant-portal-pipeline/radiant/dags/sql/radiant/init/cnv_id_udf.sql`), then
+clear the failed import tasks:
+```
+kubectl exec -i deploy/radiant-starrocks-fe -- mysql -h127.0.0.1 -P9030 -uroot <<'SQL'
+CREATE OR REPLACE GLOBAL FUNCTION GET_CNV_ID (string, bigint, bigint, string) RETURNS bigint
+PROPERTIES (
+  "symbol" = "org.radiant.CNVIdUDF",
+  "type" = "StarrocksJar",
+  "file" = "https://github.com/radiant-network/radiant-starrocks-udf/releases/download/v2.0.0/radiant-starrocks-udf-2.0.0-jar-with-dependencies.jar"
+);
+SQL
+# Must return two ids, not NULL
+kubectl exec deploy/radiant-starrocks-fe -- mysql -h127.0.0.1 -P9030 -uroot -N -e \
+  "SELECT GET_CNV_ID('1', 4063594, 1199, 'LOSS'), GET_CNV_ID('1', 13224579, 17455, 'GAIN')"
+```
+
+### Expected failure: mark the somatic CNV of case TCRBOA6 as success
+
+The simulated clinical data (`radiant-portal-pipeline/radiant/dags/sql/clinical/seeds.sql`)
+references `s3://vcf/TCRBOA6_SRX1166091-T.cnv.vcf.gz` (and its `.tbi`). That file is known to be
+problematic and is deliberately not shipped in `data/vcf/`, so `import_somatic_cnv_vcf_k8s` fails
+with `S3DownloadError … 404`. Because `radiant-import-part` waits for every VCF import, **nothing**
+is inserted into StarRocks until that task is resolved.
+
+This is the expected procedure, confirmed by the team: mark the task as success by hand.
+1. In the Airflow UI, open `radiant-import-part` and select the failed run.
+2. Click the `import_somatic_cnv_vcf_k8s` task and mark it **Success**, for that task only. Do
+   **not** tick "Downstream": that would mark the waiting insert tasks as success without running
+   them, and nothing would reach StarRocks.
+3. Then clear the run's remaining failed tasks (the `upstream_failed` inserts) so they run: on the
+   run, **Clear → Only failed**.
+
+Everything except that one somatic CNV gets imported.
+
+The same from the CLI, for scripting:
+```
+RUN='<run_id of the failed radiant-import-part run>'
+kubectl exec deploy/airflow-scheduler -c scheduler -- python -c "
+from airflow.models import TaskInstance as TI
+from airflow.utils.session import create_session
+with create_session() as s:
+    ti = s.query(TI).filter(TI.dag_id=='radiant-import-part', TI.run_id=='$RUN',
+                            TI.task_id=='import_somatic_cnv_vcf_k8s').one()
+    ti.state = 'success'; s.merge(ti)"
+# then, with the run's logical date (shown by `airflow dags list-runs radiant-import-part`):
+kubectl exec deploy/airflow-scheduler -c scheduler -- airflow tasks clear radiant-import-part \
+  --only-failed --start-date <logical_date> --end-date <logical_date> --yes
+```
+
+To re-run only what failed in an import (for example after fixing the UDF), use the same
+`airflow tasks clear … --only-failed` call; add `--downstream` when the failed tasks are upstream
+of others. Triggering a new `Radiant - Scheduled Import` instead may find nothing left to import,
+since the failed run already took the sequencing experiments.
 
 ## Edit /etc/host file 
 Add the following line to your /etc/hosts file to access the keycloak admin console:
@@ -510,6 +600,29 @@ Click on `Role Mappings` tab
 Click on `Assign Roles`, then select `Client Roles`.
 
 Select `radiant` in the table and then click on `Assign` Button.
+
+## Give the user roles in the portal
+
+A Keycloak account alone only gets you to a 403 page, "Vous n'avez pas accès à RADIANT": the portal
+is multi-tenant and reads each user's roles from the `user_role` table of the `radiant` Postgres
+database. Grant them with the toolbox's `create-user`, using the user's Keycloak ID (*Users* → the
+user → *ID*):
+```
+SUB=<keycloak user id>
+kubectl run create-user --rm -i --restart=Never --image=radiant-local-toolbox:latest \
+  --overrides='{"spec":{"containers":[{"name":"create-user","image":"radiant-local-toolbox:latest",
+    "imagePullPolicy":"Never","envFrom":[{"secretRef":{"name":"radiant-toolbox-secret"}}],
+    "command":["create-user","-sub","'"$SUB"'",
+      "-grant","radiant:*:member","-grant","radiant:*:geneticist",
+      "-grant","radiant:*:data_manager","-grant","radiant::tenant_admin"]}]}}'
+```
+A grant is `tenant:org:role`; `*` means every organization of the tenant, and an empty org a
+tenant-wide role. `member` lets the user search cases, `geneticist` interpret variants,
+`data_manager` import data, and `tenant_admin` manage members. Without Ranger the command ends with
+a `ranger: …` error after the roles are granted (see [Install Ranger (optional)](#install-ranger-optional)).
+
+Once a user has `tenant_admin`, further members can be added from the portal's admin section. They
+get no password: set one in the Keycloak console (*Credentials* → *Set password*, *Temporary* off).
 
 ## Connect to Radiant Portal UI
 Open a new browser tab and go to http://localhost:3000
