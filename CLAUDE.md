@@ -138,7 +138,11 @@ aws s3 sync data/input_parquet/ s3://warehouse/input_parquet/
 aws s3 sync data/vcf/germline/ s3://vcf/
 aws s3 sync data/vcf/somatic/ s3://vcf/
 
-# Build images inside Minikube's docker so kubelet resolves them without a registry
+# Build images inside Minikube's docker so kubelet resolves them without a registry.
+# Requires the `docker` container runtime (check RUNTIME in `minikube profile list`): with
+# `containerd`, docker-env points at a shim and every build fails with
+# `failed to inspect pulled image moby/buildkit:buildx-stable-1 ... 404 page not found`.
+# The runtime is fixed at creation, so switching means `minikube delete` (wipes PVs).
 eval $(minikube -p minikube docker-env)
 docker build -t <tag> -f <Dockerfile> .
 
@@ -147,7 +151,16 @@ docker build -t <tag> -f <Dockerfile> .
 minikube mount $(pwd)/../radiant-portal-pipeline/radiant:/opt/airflow/dags/radiant
 minikube mount $(pwd)/../radiant-open-datalake/airflow/opendatalake:/opt/airflow/dags/opendatalake
 
+# Once per machine, or `repo apache-airflow not found`. Run helm from the repo root: values/ is relative.
+helm repo add apache-airflow https://airflow.apache.org && helm repo update apache-airflow
 helm install airflow apache-airflow/airflow --version 1.21.0 -f values/airflow3-values.yaml
+
+# Toolbox commands (create-user, create-tenant, refresh-tenants) as a one-off pod.
+# imagePullPolicy Never: the image only exists in Minikube's docker.
+kubectl run create-user --rm -i --restart=Never --image=radiant-local-toolbox:latest \
+  --overrides='{"spec":{"containers":[{"name":"create-user","image":"radiant-local-toolbox:latest",
+    "imagePullPolicy":"Never","envFrom":[{"secretRef":{"name":"radiant-toolbox-secret"}}],
+    "command":["create-user","-sub","<keycloak id>","-grant","radiant:*:member"]}]}}'
 
 # Open Datalake Spark image: JAR first, then build with the SIBLING repo's spark/ as context
 (cd ../radiant-open-datalake/spark && sbt clean assembly)
@@ -157,6 +170,13 @@ docker build -t ghcr.io/radiant-network/opendatalake-spark:latest \
 ```
 
 ### After every `minikube start`
+
+A laptop sleep counts as one. Docker Desktop restarts the `minikube` container on new host ports
+but the kubelet stays down: `minikube status` shows `kubelet: Stopped`, `apiserver: Stopped`,
+`kubeconfig: Misconfigured` (endpoint got/want mismatch). Run `minikube start` — never `delete` —
+then do the steps below. The old `minikube tunnel` / `minikube mount` processes keep running but are
+dead (they point at the old ports): Ctrl+C and restart them. Pods show `Error` for a few minutes
+and recover on their own.
 
 Three things reset and must be redone in this order — not just on first setup:
 
@@ -224,13 +244,20 @@ unreachable host with a low attempt cap and confirm it exits non-zero instead of
 - **Don't change install order** unless the dependency assumptions in the init jobs change with it (e.g. `polaris-init-tables` waits on the catalog job, which waits on Postgres + Polaris; RustFS must already hold the seed parquet).
 - **Airflow 3 only.** `values/airflow2-values.yaml` was removed in `614fa5e`; the Airflow 2 path is gone.
 - **Liveness probes need an `initialDelaySeconds` here.** The StarRocks probes ask the *FE* whether a node has registered, so they cannot pass until both FE and CN are up. Both originally started at t=0 — the CN allowed 3×10s = 30s, less than the 15s sleep in its own start command — so every `minikube start` killed them mid-boot with exit 137 and looped. Now 120s+5×10s (CN) and 90s+10×10s (FE). Keep a delay on any probe whose success depends on a *different* pod.
+- **…and an explicit `timeoutSeconds`.** The default is 1s and every timeout counts as a failure. During an import the 4-CPU VM runs at load 10–23, so a 1s `pg_isready` timed out and the kubelet restarted Postgres 74 times, mid-import, taking Polaris down with it (`57P01 terminating connection due to administrator command`). Postgres now uses 5s × 6. The Airflow probes (20s) still time out at peak load, which is why `import_vcf` is capped at 2. When a probe fails under load, look at the load average (`minikube ssh -- cat /proc/loadavg`) before blaming the service.
 - **Resetting:** changing Docker's resource config requires deleting and recreating the Minikube VM — Docker/Minikube config drift is a known foot-gun.
 - **The VM is oversubscribed.** StarRocks CN alone requests 4Gi (no limit) and the FE 1Gi, on top of 7 Airflow pods, Postgres, RustFS, Polaris, Keycloak and api/ui/worker. Adding a 2–3Gi Open Datalake Spark pod filled a 15.6GiB VM to 99% and thrashed it into unresponsiveness — `kubectl`, `minikube status` and even `docker exec … cat /proc/loadavg` all time out, and `minikube tunnel` reports TLS handshake timeouts. `docker stats --no-stream minikube` still works and is the fastest way to confirm it. Recovery is `minikube stop && minikube start` (PVs survive; only `minikube delete` destroys them). Don't run an Open Datalake import alongside a Radiant VCF import.
-- **PRs** use `.github/pull_request_template.md`; branches and commits are named after JIRA issues (`feat/sjra-1888`, `feat: SJRA-1544 …`), and the template has `<!-- Begin/End JIRA Issues -->` markers that tooling fills in — leave them in place.
+- **PRs** use `.github/pull_request_template.md`; branches and commits are named after JIRA issues, and the template has `<!-- Begin/End JIRA Issues -->` markers that tooling fills in — leave them in place. The Jira project is now **RAD** (ferlab-crsj.atlassian.net); older history uses SJRA. Team conventions (FerLab *Developer Handbook* in Notion): branch `feat/rad-123` or `fix/rad-123`, lowercase (uppercase breaks Concourse); commit `type(scope): RAD-123 Capitalized message`, checked by commitlint; rebase / force-push only while no PR is open, append-only after; merge with *Squash and merge*.
+- **The sandbox trails `radiant-portal`.** Most portal breakages here came from backend features the manifests did not follow: multi-tenant reads, the Keycloak admin client, Ranger. When the API misbehaves, diff its env in `k8s/api/` against the env-var table in `../radiant-portal/backend/CLAUDE.md`, and check `../radiant-portal/backend/compose/` for how the team's own local stack wires the same service.
 
 ## Known state
 
 - **Toolbox DAG wiring.** The pipeline's `Toolbox` K8s operator (`radiant/dags/operators/k8s.py`) reads its image from `RADIANT_TOOLBOX_OPERATOR_IMAGE` and its whole env via `envFrom` from secret `radiant-toolbox-secret` (`k8s/toolbox/`). An unset image is not a config error — the pod is submitted with no `image` and the API server rejects it with `422 … spec.containers[0].image: Required value`. The secret mirrors the API's `DB_*`/`PG*` env in `k8s/api/radiant-api-deployments.yml`; keep them in sync. The `RANGER_*` values point at the optional Ranger admin in `k8s/ranger/`. They stay set whether or not it is deployed: nothing contacts Ranger at startup, the clients are lazy. Without it, `refresh-tenants`, `create-tenant`, `create-user` and the portal's add-member (`POST /{tenant}/users`) fail at their Ranger step with `connection refused` / `no such host`, after the Keycloak/StarRocks/Postgres work is already done. Making Ranger skippable in code was rejected: the fix is to deploy it, not to touch `radiant-portal`.
+- **The portal is multi-tenant; a Keycloak account is not enough.** After login the UI asks the API for the user's tenant memberships, read from `user_role` in the `radiant` Postgres DB; none → a 403 page, "Vous n'avez pas accès à RADIANT". Grant roles with the toolbox's `create-user -sub <keycloak id> -grant tenant:org:role` (tenant `radiant`; org `*` = all orgs, empty = tenant-wide; roles `member`, `geneticist`, `data_manager`, `tenant_admin`). `create-user` runs Keycloak (skipped with `-sub`) → StarRocks JWT user → Postgres grants → Ranger, in that order, so a Ranger failure leaves the rest done. Keycloak IDs: `psql -d keycloak -c "select id, username from user_entity"`.
+- **API multi-tenant flags.** The pipeline writes per-tenant tables to `<tenant>_tenant` (`radiant_tenant`), so the API runs with `TENANT_VIEWS_READ_ENABLED=true` (otherwise it queries bare names in `radiant` → `Unknown table 'radiant.germline__snv__occurrence'`) and `VIEW_REFRESH_ON_STARTUP_ENABLED=true` (recreates the 52 federated views like `radiant_tenant.cases` at every start; fatal on error). Leave `STARROCKS_PROXY_READ_ENABLED` off: it needs Ranger enforcement and `mysql-proxy`, which the sandbox does not have.
+- **Keycloak realm changes need two places.** The realm JSON in `k8s/keycloak/keycloak-realm-import-configmap.yaml` is imported only on the first Keycloak start (state then lives in Postgres), so editing it does nothing on a running sandbox. Apply the same change live with `kubectl exec deploy/radiant-keycloak -- /opt/keycloak/bin/kcadm.sh …` (login: `--server http://localhost:8282 --realm master --user admin --password admin`). Example: the `radiant-admin-cli` service-account client (secret `radiant-admin-secret`, realm-management `manage-users`/`view-users`/`query-users`) that the API uses via `KEYCLOAK_ADMIN_CLIENT_ID/SECRET` to add members.
+- **Portal 404s on `/api/users/preferences/<key>` are normal.** `selected-tenant`, `query-builder-*`, `saved-filters-*` return 404 until the user saves one; the UI falls back to defaults (first tenant). Not a bug.
+- **OIDC `Missing state on cookie` (500 on `/auth/callback`)** is a browser cookie issue, not config: mixing `127.0.0.1:3000` and `localhost:3000` (`PORTAL_HOST` is `localhost`), several portal tabs, or a reloaded callback URL. Clear `localhost` cookies, use one tab on `http://localhost:3000`.
 - **A failed `helm install` skips the Airflow user.** `createUserJob` is a post-install hook, so an install that times out (e.g. `ImagePullBackOff` because a local image wasn't built yet) leaves the release `failed` and FAB with no users — every login is "invalid". `airflow users list` shows `No data found`. Fix with `helm upgrade` using the same values, which re-runs the hook and clears the `failed` status.
 - **`GET_CNV_ID` must be the v2.0.0 UDF.** The pipeline's CNV inserts pass the resolved type (`LOSS`/`GAIN`, since SJRA-1775); radiant-starrocks-udf v1.2.0 only maps the VCF alternate (`<DEL>`) and returns `NULL`, so the germline CNV insert fails with `NULL value in non-nullable column 'cnv_id'`. `Init StarRocks Base Tables` still defaults `udf_release_version` to `v1.2.0` — pass `v2.0.0`. `GET_VARIANT_ID` is identical in both. The rejected rows are in `information_schema.load_tracking_logs` (job id printed in the task log).
 - **Keep the `import_vcf` pool at 2 slots.** 128 (the deployed value) starts every extraction pod at once; they request 500m CPU with no limit, saturate the 4-CPU VM (load 13+), and the kubelet restarts the Airflow scheduler/worker on probe timeouts, which fails all extraction tasks. Even at 2 the StarRocks insert phase peaks around load 23.
