@@ -10,6 +10,7 @@ Software requirements to run this project locally:
 - Minikube 
 - Kubectl
 - Helm
+- AWS CLI v2.22+ (`brew install awscli`), to seed the buckets
 
 Hardware requirements to run this project locally:
 - 16 GB RAM
@@ -26,9 +27,28 @@ Configure minikube to use at least 16 GB of RAM and 4 CPU Cores:
 ```
 minikube config set memory 16000
 minikube config set cpus 4
+minikube config set container-runtime docker
+```
+
+**The container runtime must be `docker`.** Every image in this sandbox is built with
+`eval $(minikube docker-env) && docker build …`, which needs a real Docker Engine inside the VM.
+With the `containerd` runtime, `docker-env` points at a compatibility shim and every build fails with:
+```
+ERROR: failed to build: failed to inspect pulled image moby/buildkit:buildx-stable-1: Error response from daemon: 404 page not found
+```
+Check the `RUNTIME` column of `minikube profile list`. These settings only apply when the cluster is
+created, so changing them on an existing cluster means `minikube delete && minikube start`, which
+wipes all volumes.
+
+Add the Airflow Helm chart repository (once per machine):
+```
+helm repo add apache-airflow https://airflow.apache.org
+helm repo update apache-airflow
 ```
 
 # Installation
+
+Unless a step says otherwise, run every command from the root of this repository.
 
 
 ## Run minikube tunnel in a separate terminal
@@ -45,6 +65,11 @@ kubectl create namespace radiant
 ```
 kubectl config set-context --current --namespace=radiant
 ```
+
+None of the manifests set a namespace, so they land in whatever namespace kubectl points at.
+`minikube start` and `minikube update-context` reset it to `default`. If `kubectl get po` suddenly
+shows nothing, check with `kubectl config view --minify -o jsonpath='{..namespace}'` and run the
+command above again. Never `kubectl apply` while pointed at `default`.
 
 ## Install RustFS
 ```
@@ -101,7 +126,13 @@ brew install awscli
 
 Point it at the tunnelled RustFS and copy `data/` in. These are the sandbox credentials from
 `k8s/rustfs/radiant-rustfs-deployment.yaml`; exporting them for the shell avoids repeating
-`--endpoint-url` flags with a profile you do not want to keep:
+`--endpoint-url` flags with a profile you do not want to keep.
+
+Run the exports **in the same terminal as the `aws` commands**, not in the `minikube tunnel` one.
+They only last for that shell, so repeat them in any new terminal. Don't put them in `~/.zshrc`,
+or every `aws` command would go to the local RustFS instead of AWS. The pods get the same
+credentials from their manifests, but the seed runs on your machine because `data/` is on your
+disk, and from the host RustFS is `127.0.0.1:9000` (through the tunnel), not `radiant-rustfs:9000`.
 ```
 export AWS_ACCESS_KEY_ID=admin
 export AWS_SECRET_ACCESS_KEY=password
@@ -244,6 +275,12 @@ Let this command run in a separate terminal while you are working with Airflow.
 
 ## Pre-building the Radiant task operator image (~6 minutes)
 
+Despite the name, the task and dbt "operators" are not Kubernetes operators. They are the images
+of the short-lived pods that Airflow starts for heavy tasks (`KubernetesPodOperator`): the task
+operator runs the Radiant VCF/Iceberg code, and the dbt operator runs the data integrity checks
+against StarRocks. Pods use `imagePullPolicy: IfNotPresent`, so the image must already be in
+Minikube's Docker with the exact tag from `values/airflow3-values.yaml`.
+
 Inside the `radiant-portal-pipeline` directory, run the following command to build the Radiant task operator image:
 
 ```
@@ -297,29 +334,42 @@ kubectl apply -f k8s/airflow/
 
 ## Install Airflow
 
-- Build the docker image:
+Before installing, check that:
+- the task operator, dbt operator and toolbox images are built (`eval $(minikube -p minikube docker-env) && docker images | grep radiant`);
+- the Airflow volumes above are applied;
+- the DAG mount (and the Open Data Lake one, if you use it) is running in its own terminal;
+- the `apache-airflow` Helm repository is added (see [Requirements](#requirements)).
+
+- Build the docker image, from the root of this repository:
   ```
-  cd docker/airflow3
   eval $(minikube -p minikube docker-env)
-  docker build -t ghcr.io/radiant-network/radiant-airflow3:1.0.10 .
+  docker build -t ghcr.io/radiant-network/radiant-airflow3:1.0.10 docker/airflow3
   ```
-- Install via helm:
+- Install via helm, still from the root of this repository (`values/` is a path relative to it):
   ```
-	helm install airflow apache-airflow/airflow  --version 1.21.0  -f values/airflow3-values.yaml
+  helm install airflow apache-airflow/airflow --version 1.21.0 -f values/airflow3-values.yaml
   ```
 
 Took 5 minutes to install Airflow
+
+If the install fails or times out (for example `ImagePullBackOff` because an image was not built
+yet), fix the cause and run `helm upgrade` with the same arguments rather than `helm install` again.
+The Airflow user is created by a post-install hook, so a failed install leaves no user and every
+login is rejected until the upgrade re-runs the hook.
 
 ## Monitor Airflow pod are running (5 minutes)
 ```
 kubectl get po | grep airflow
 ```
-Results 4 pods running:
+Results 7 pods running:
 ```
-airflow-scheduler-6644cb8c5d-rcncc       2/2     Running     0          99s
-airflow-statsd-75fdf4bc64-7w9sb          1/1     Running     0          99s
-airflow-triggerer-0                      2/2     Running     0          99s
-airflow-webserver-744898d99-nvxrn        1/1     Running     0          99s
+airflow-api-server-54f7b86969-fkwh6      1/1     Running     0          5m
+airflow-dag-processor-6dfd88894-sd2dq    2/2     Running     0          5m
+airflow-redis-0                          1/1     Running     0          5m
+airflow-scheduler-9ff6fdb7f-wwphn        2/2     Running     0          5m
+airflow-statsd-5c5bdd47c5-4lkhf          1/1     Running     0          5m
+airflow-triggerer-0                      2/2     Running     0          5m
+airflow-worker-0                         2/2     Running     0          5m
 ```
 
 ## Configure airflow
@@ -427,6 +477,52 @@ You should be redirected to keycloak login page. Put the username and password y
 Then you should be able to see the case list page.
 
 If you click on Case 1 (Family trio) or case 8 (Solo), you should be able to click on Variants tab and see the variants for the case.
+
+## After a restart or laptop sleep
+
+Putting the laptop to sleep can leave the cluster unresponsive: Docker Desktop restarts the
+`minikube` container on new host ports, but the kubelet does not come back. `minikube status` shows:
+```
+kubelet: Stopped
+apiserver: Stopped
+kubeconfig: Misconfigured
+```
+Run `minikube start` (not `minikube delete`, which wipes all volumes). Pods show `Error` for a few
+minutes after any restart, then recover on their own.
+
+After every `minikube start`, whether after sleep or not, redo these steps in order:
+1. Point kubectl back at the namespace: `kubectl config set-context --current --namespace=radiant`.
+2. Stop the old `minikube tunnel` and `minikube mount` processes with Ctrl+C, then start them again,
+   each in its own terminal. They keep running after a restart but no longer work.
+3. Restart the Airflow pods, which started before the mounts existed and see an empty DAG folder:
+   ```
+   kubectl rollout restart deploy/airflow-dag-processor deploy/airflow-scheduler \
+     statefulset/airflow-worker statefulset/airflow-triggerer
+   ```
+
+## Browsing the data
+
+Polaris has no web UI: port 8181 serves the Iceberg REST and management APIs, and port 8182 serves
+health and metrics (`/q/health`, `/q/metrics`). To look at the data:
+- **StarRocks**, with any MySQL client (DBeaver, `mysql`): `localhost:9030`, user `root`, no
+  password. With DBeaver's MySQL driver, set the driver properties `allowPublicKeyRetrieval=true`
+  and `useSSL=false`. The Iceberg tables in Polaris are only reachable through SQL, not the
+  navigator tree:
+  ```
+  SHOW CATALOGS;
+  SHOW TABLES FROM radiant_iceberg_catalog.radiant;
+  ```
+- **Postgres**: `localhost:5432`, `postgres` / `postgres`. In DBeaver, tick *Show all databases* to
+  see `airflow`, `radiant`, `polaris` and `keycloak`.
+- **RustFS console** (files behind the tables): http://localhost:9001, `admin` / `password`.
+- **Polaris API** with `curl`. Every call needs the `Polaris-Realm: radiant` header:
+  ```
+  TOKEN=$(curl -s -X POST http://localhost:8181/api/catalog/v1/oauth/tokens \
+    -H "Polaris-Realm: radiant" -d grant_type=client_credentials \
+    -d client_id=root -d client_secret=password -d scope=PRINCIPAL_ROLE:ALL | jq -r .access_token)
+  curl -s -H "Authorization: Bearer $TOKEN" -H "Polaris-Realm: radiant" \
+    http://localhost:8181/api/catalog/v1/polaris/namespaces/radiant/tables | jq
+  ```
 
 ## Open Data Lake integration
 
