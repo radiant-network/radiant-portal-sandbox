@@ -519,6 +519,18 @@ data:
           },
           "notBefore": 0,
           "groups": []
+        },
+        {
+          "username": "service-account-radiant-admin-cli",
+          "enabled": true,
+          "serviceAccountClientId": "radiant-admin-cli",
+          "clientRoles": {
+            "realm-management": [
+              "manage-users",
+              "view-users",
+              "query-users"
+            ]
+          }
         }
       ],
       "scopeMappings": [
@@ -541,6 +553,21 @@ data:
         ]
       },
       "clients": [
+        {
+          "clientId": "radiant-admin-cli",
+          "name": "Radiant admin CLI service account",
+          "description": "Service account the API and the toolbox use to manage users via the Admin API (KEYCLOAK_ADMIN_CLIENT_ID)",
+          "enabled": true,
+          "clientAuthenticatorType": "client-secret",
+          "secret": "radiant-admin-secret",
+          "standardFlowEnabled": false,
+          "implicitFlowEnabled": false,
+          "directAccessGrantsEnabled": false,
+          "serviceAccountsEnabled": true,
+          "publicClient": false,
+          "protocol": "openid-connect",
+          "fullScopeAllowed": true
+        },
         {
           "id": "50563df1-e6e3-47ee-b44b-9b48a4c1b37f",
           "clientId": "account",

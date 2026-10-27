@@ -1,0 +1,119 @@
+# Apache Ranger admin, so the API (`POST /{tenant}/users`) and the toolbox commands (`create-user`,
+# `create-tenant`, `refresh-tenants`) can complete their Ranger steps instead of failing on an empty
+# RANGER_URL. Same image as radiant-portal's local stack (backend/compose/ranger-compose.yml).
+#
+# Admin only: StarRocks keeps its native access control (no `access_control = ranger` in fe.conf), so the
+# roles and PII masking policies are created in Ranger but NOT enforced on queries.
+#
+# Upstream runs the image in three phases (migrate Job / serve Deployment / register Job) to keep
+# secrets apart. A sandbox does not need that split: `serve` runs setup.sh itself (idempotent) and, with
+# RANGER_REGISTER_ON_SERVE left at true, registers the baked `starrocks` service-def + service -- the
+# service name the backend targets (`rangerStarrocksService`).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: radiant-ranger
+  labels:
+    app: radiant-ranger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: radiant-ranger
+  template:
+    metadata:
+      labels:
+        app: radiant-ranger
+    spec:
+      initContainers:
+        # Ranger runs in SeparateDBA mode: the database and its owner must exist beforehand. Created
+        # here rather than in postgres-init-configmap.yaml so it also works on an existing cluster,
+        # where the Postgres init job has already run. Idempotent.
+        - name: create-ranger-db
+          image: postgres:14
+          env:
+            - name: PGHOST
+              value: postgres
+            - name: PGUSER
+              value: postgres
+            - name: PGPASSWORD
+              value: postgres
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              until pg_isready -h "$PGHOST" -U "$PGUSER"; do echo "waiting for postgres"; sleep 2; done
+              psql -v ON_ERROR_STOP=1 -d postgres <<'SQL'
+              SELECT 'CREATE ROLE rangeradmin LOGIN PASSWORD ''rangerR0cks!'''
+                WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'rangeradmin')\gexec
+              SELECT 'CREATE DATABASE ranger OWNER rangeradmin'
+                WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'ranger')\gexec
+              SQL
+      containers:
+        - name: radiant-ranger
+          image: ghcr.io/radiant-network/apache-ranger-starrocks:2.8.0-v0.9.0
+          args: ["serve"]
+          env:
+            - name: RANGER_DB_HOST
+              value: postgres
+            - name: RANGER_DB_NAME
+              value: ranger
+            - name: RANGER_DB_USER
+              value: rangeradmin
+            - name: RANGER_DB_PASSWORD
+              value: rangerR0cks!
+            # Unused under SeparateDBA; set to the runtime credentials as upstream does.
+            - name: RANGER_DB_ROOT_USER
+              value: rangeradmin
+            - name: RANGER_DB_ROOT_PASSWORD
+              value: rangerR0cks!
+            # Account passwords (>= 8 chars, upper + lower + digit), written to the DB by setup.sh.
+            # RANGER_ADMIN_PASSWORD is also what the API and the toolbox authenticate with.
+            - name: RANGER_ADMIN_PASSWORD
+              value: rangerR0cks!
+            - name: RANGER_KEYADMIN_PASSWORD
+              value: rangerR0cks!
+            - name: RANGER_TAGSYNC_PASSWORD
+              value: rangerR0cks!
+            - name: RANGER_USERSYNC_PASSWORD
+              value: rangerR0cks!
+            - name: RANGER_POLICYMGR_EXTERNAL_URL
+              value: http://radiant-ranger:6080
+            # Values substituted into the baked `starrocks` service. Autocomplete off: it would make
+            # Ranger probe StarRocks over JDBC, and nothing here needs resource autocomplete.
+            - name: RANGER_STARROCKS_SERVICE_NAME
+              value: starrocks
+            - name: RANGER_STARROCKS_AUTOCOMPLETE
+              value: "no"
+            - name: RANGER_STARROCKS_USERNAME
+              value: root
+            - name: RANGER_STARROCKS_PASSWORD
+              value: ""
+            - name: RANGER_STARROCKS_JDBC_URL
+              value: jdbc:mysql://radiant-starrocks-fe:9030
+          ports:
+            - containerPort: 6080
+          # setup.sh rewrites the schema check on every start and the admin JVM is capped at 1g heap
+          # (ranger_admin_max_heap_size), so 2Gi leaves room for metaspace and Tomcat threads.
+          resources:
+            requests:
+              memory: 1Gi
+              cpu: 250m
+            limits:
+              memory: 2Gi
+          readinessProbe:
+            httpGet:
+              path: /login.jsp
+              port: 6080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            failureThreshold: 30
+          # First start runs the full schema install, which takes a few minutes on this VM.
+          livenessProbe:
+            httpGet:
+              path: /login.jsp
+              port: 6080
+            initialDelaySeconds: 420
+            periodSeconds: 20
+            failureThreshold: 6

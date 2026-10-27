@@ -46,12 +46,37 @@ spec:
               value: radiant
             - name: KEYCLOAK_CLIENT_ROLE
               value: radiant
+            # Service-account client (realm-management manage/view/query-users) used by
+            # POST /{tenant}/users to create users in Keycloak. Defined in the realm import;
+            # same values in k8s/toolbox/radiant-toolbox-secret.yaml.
+            - name: KEYCLOAK_ADMIN_CLIENT_ID
+              value: radiant-admin-cli
+            - name: KEYCLOAK_ADMIN_CLIENT_SECRET
+              value: radiant-admin-secret
+            # Ranger admin (k8s/ranger/), called when a member is added or removed. Same values in
+            # k8s/toolbox/radiant-toolbox-secret.yaml.
+            - name: RANGER_URL
+              value: http://radiant-ranger:6080
+            - name: RANGER_ADMIN_USER
+              value: admin
+            - name: RANGER_ADMIN_PASSWORD
+              value: rangerR0cks!
             - name: PUBMED_BASE_URL
               value: https://api.ncbi.nlm.nih.gov
             - name: CORS_ALLOWED_ORIGINS
               value: "*"
             - name: RADIANT_AUTHORIZATION_PROVIDER
               value: keycloak
+            # Multi-tenant layout, as in QA: the pipeline writes per-tenant tables to
+            # `<tenant>_tenant` (here `radiant_tenant`). Off, the API reads bare table names from
+            # the default DB `radiant` and every occurrence query fails with
+            # `Unknown table 'radiant.germline__snv__occurrence'`.
+            - name: TENANT_VIEWS_READ_ENABLED
+              value: "true"
+            # Recreate each tenant's federated views (`radiant_tenant.cases`, `patient`, ...) at
+            # startup; fatal on error. Needs no Ranger, unlike the refresh-tenants CLI.
+            - name: VIEW_REFRESH_ON_STARTUP_ENABLED
+              value: "true"
 
           livenessProbe:
             httpGet:

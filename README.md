@@ -10,6 +10,7 @@ Software requirements to run this project locally:
 - Minikube 
 - Kubectl
 - Helm
+- AWS CLI v2.22+ (`brew install awscli`), to seed the buckets
 
 Hardware requirements to run this project locally:
 - 16 GB RAM
@@ -26,9 +27,25 @@ Configure minikube to use at least 16 GB of RAM and 4 CPU Cores:
 ```
 minikube config set memory 16000
 minikube config set cpus 4
+minikube config set container-runtime docker
 ```
 
+4 CPUs is the minimum, and an import saturates them. If Docker has more to give, set `cpus 6`
+instead (see [Configure airflow](#configure-airflow) for what keeps an import working on 4).
+
+**The container runtime must be `docker`.** Every image in this sandbox is built with
+`eval $(minikube docker-env) && docker build …`, which needs a real Docker Engine inside the VM.
+With the `containerd` runtime, `docker-env` points at a compatibility shim and every build fails with:
+```
+ERROR: failed to build: failed to inspect pulled image moby/buildkit:buildx-stable-1: Error response from daemon: 404 page not found
+```
+Check the `RUNTIME` column of `minikube profile list`. These settings only apply when the cluster is
+created, so changing them on an existing cluster means `minikube delete && minikube start`, which
+wipes all volumes.
+
 # Installation
+
+Unless a step says otherwise, run every command from the root of this repository.
 
 
 ## Run minikube tunnel in a separate terminal
@@ -45,6 +62,11 @@ kubectl create namespace radiant
 ```
 kubectl config set-context --current --namespace=radiant
 ```
+
+None of the manifests set a namespace, so they land in whatever namespace kubectl points at.
+`minikube start` and `minikube update-context` reset it to `default`. If `kubectl get po` suddenly
+shows nothing, check with `kubectl config view --minify -o jsonpath='{..namespace}'` and run the
+command above again. Never `kubectl apply` while pointed at `default`.
 
 ## Install RustFS
 ```
@@ -101,7 +123,13 @@ brew install awscli
 
 Point it at the tunnelled RustFS and copy `data/` in. These are the sandbox credentials from
 `k8s/rustfs/radiant-rustfs-deployment.yaml`; exporting them for the shell avoids repeating
-`--endpoint-url` flags with a profile you do not want to keep:
+`--endpoint-url` flags with a profile you do not want to keep.
+
+Run the exports **in the same terminal as the `aws` commands**, not in the `minikube tunnel` one.
+They only last for that shell, so repeat them in any new terminal. Don't put them in `~/.zshrc`,
+or every `aws` command would go to the local RustFS instead of AWS. The pods get the same
+credentials from their manifests, but the seed runs on your machine because `data/` is on your
+disk, and from the host RustFS is `127.0.0.1:9000` (through the tunnel), not `radiant-rustfs:9000`.
 ```
 export AWS_ACCESS_KEY_ID=admin
 export AWS_SECRET_ACCESS_KEY=password
@@ -171,6 +199,47 @@ Results 1 pod running :
 ```
 radiant-keycloak-b544d74bb-wk5zv         1/1     Running     0          53s
 ```
+
+## Install Ranger (optional)
+
+The API and the toolbox commands (`create-user`, `create-tenant`, `refresh-tenants`) call the Ranger
+admin API when they provision users, tenant roles and PII masking policies. Ranger is optional:
+skip this step and the rest of the stack works the same, browsing cases and variants included. Only
+the Ranger step of those operations fails, **after** their other work is done:
+
+| Without Ranger | What still happens | What fails |
+|---|---|---|
+| Adding a member in the portal | Keycloak user, StarRocks user and portal roles are created | the request returns a 500 |
+| `create-user` | same as above | exits with an error |
+| `refresh-tenants` | tenant views and gene panel MVs are refreshed | masking policies |
+
+The error then reads `ranger: … dial tcp …:6080: connect: connection refused` (or `no such host`).
+Install Ranger if you work on user or tenant administration, or want those operations to succeed.
+
+The image is the one radiant-portal's local stack uses, run as a single pod. It creates its own
+`ranger` database and `rangeradmin` role in the sandbox Postgres, so install it after Postgres.
+```
+kubectl apply -f k8s/ranger/
+```
+
+The policies are created in Ranger but **not enforced**: StarRocks keeps its native access control,
+so queries are neither masked nor filtered.
+
+## Monitor Ranger pod is running (3 minutes)
+```
+kubectl get po | grep ranger
+kubectl logs deploy/radiant-ranger | grep register
+```
+Results 1 pod running, and the `starrocks` service registered:
+```
+radiant-ranger-84f496dd7-qk87k           1/1     Running     0          3m29s
+[register] service-def 'starrocks' created (from starrocks.json)
+[register] service 'starrocks' created (from starrocks.json)
+```
+
+The Ranger console is at http://localhost:6080 (`admin` / `rangerR0cks!`). The pod takes about
+1 GiB of memory. If the VM runs short during a large import, scale it down meanwhile with
+`kubectl scale deploy/radiant-ranger --replicas=0`.
 
 ## Install API
 ```
@@ -244,6 +313,12 @@ Let this command run in a separate terminal while you are working with Airflow.
 
 ## Pre-building the Radiant task operator image (~6 minutes)
 
+Despite the name, the task and dbt "operators" are not Kubernetes operators. They are the images
+of the short-lived pods that Airflow starts for heavy tasks (`KubernetesPodOperator`): the task
+operator runs the Radiant VCF/Iceberg code, and the dbt operator runs the data integrity checks
+against StarRocks. Pods use `imagePullPolicy: IfNotPresent`, so the image must already be in
+Minikube's Docker with the exact tag from `values/airflow3-values.yaml`.
+
 Inside the `radiant-portal-pipeline` directory, run the following command to build the Radiant task operator image:
 
 ```
@@ -282,9 +357,9 @@ Then apply the secret the pod reads its StarRocks and Postgres settings from:
 kubectl apply -f k8s/toolbox/
 ```
 
-> There is no Ranger in the sandbox. `refresh-tenants` refreshes the tenant views and gene panel
-> MVs, then fails at `refresh masking policies` — that failure is expected. The Ranger steps of
-> `create-tenant` and `create-user` fail the same way.
+> `refresh-tenants`, `create-tenant` and `create-user` also write to Ranger. Without it (see
+> [Install Ranger (optional)](#install-ranger-optional)) they fail at their Ranger step, once the
+> rest of their work is done.
 
 > **Testing the Open Data Lake integration?** Build its two images now as well, and apply the
 > operator swaps — both before the Airflow install below. See
@@ -297,29 +372,47 @@ kubectl apply -f k8s/airflow/
 
 ## Install Airflow
 
-- Build the docker image:
+Before installing, check that:
+- the task operator, dbt operator and toolbox images are built (`eval $(minikube -p minikube docker-env) && docker images | grep radiant`);
+- the Airflow volumes above are applied;
+- the DAG mount (and the Open Data Lake one, if you use it) is running in its own terminal;
+- the `apache-airflow` Helm repository is added (once per machine, otherwise `helm install` fails
+  with `repo apache-airflow not found`):
   ```
-  cd docker/airflow3
+  helm repo add apache-airflow https://airflow.apache.org
+  helm repo update apache-airflow
+  ```
+
+- Build the docker image, from the root of this repository:
+  ```
   eval $(minikube -p minikube docker-env)
-  docker build -t ghcr.io/radiant-network/radiant-airflow3:1.0.10 .
+  docker build -t ghcr.io/radiant-network/radiant-airflow3:1.0.10 docker/airflow3
   ```
-- Install via helm:
+- Install via helm, still from the root of this repository (`values/` is a path relative to it):
   ```
-	helm install airflow apache-airflow/airflow  --version 1.21.0  -f values/airflow3-values.yaml
+  helm install airflow apache-airflow/airflow --version 1.21.0 -f values/airflow3-values.yaml
   ```
 
 Took 5 minutes to install Airflow
+
+If the install fails or times out (for example `ImagePullBackOff` because an image was not built
+yet), fix the cause and run `helm upgrade` with the same arguments rather than `helm install` again.
+The Airflow user is created by a post-install hook, so a failed install leaves no user and every
+login is rejected until the upgrade re-runs the hook.
 
 ## Monitor Airflow pod are running (5 minutes)
 ```
 kubectl get po | grep airflow
 ```
-Results 4 pods running:
+Results 7 pods running:
 ```
-airflow-scheduler-6644cb8c5d-rcncc       2/2     Running     0          99s
-airflow-statsd-75fdf4bc64-7w9sb          1/1     Running     0          99s
-airflow-triggerer-0                      2/2     Running     0          99s
-airflow-webserver-744898d99-nvxrn        1/1     Running     0          99s
+airflow-api-server-54f7b86969-fkwh6      1/1     Running     0          5m
+airflow-dag-processor-6dfd88894-sd2dq    2/2     Running     0          5m
+airflow-redis-0                          1/1     Running     0          5m
+airflow-scheduler-9ff6fdb7f-wwphn        2/2     Running     0          5m
+airflow-statsd-5c5bdd47c5-4lkhf          1/1     Running     0          5m
+airflow-triggerer-0                      2/2     Running     0          5m
+airflow-worker-0                         2/2     Running     0          5m
 ```
 
 ## Configure airflow
@@ -329,10 +422,20 @@ Connect to the Airflow UI at http://localhost:8080
 
 Then Unpause all the dags by sliding the toggle button of each dag to the right.
 
+Don't skip the ones you never trigger yourself. `Radiant - Scheduled Import` (`radiant-import`)
+triggers `radiant-import-part`, which triggers `radiant-import-snv-vcf`, then
+`radiant-data-integrity-starrocks`, and waits for each. A paused child leaves its run `queued` until
+the parent times out and fails at `import_part`. None of them has a schedule, so unpausing them
+triggers nothing:
+```
+kubectl exec deploy/airflow-scheduler -c scheduler -- sh -c \
+  'for d in radiant-import radiant-import-part radiant-import-snv-vcf radiant-data-integrity-starrocks; do airflow dags unpause $d -y; done'
+```
+
 Configure the pools :
 - Go to Admin -> Pools
 - Create a new pool named "import_part" with 1 slot
-- Create a new pool named "import_vcf" with 128 slots
+- Create a new pool named "import_vcf" with 2 slots (see below)
 - Create a new pool named "starrocks_insert_pool" with 1 slot **and "Include deferred tasks"
   ticked** — see below
 
@@ -341,6 +444,13 @@ Only if you are testing the Open Data Lake integration, create these three as we
 - `opendatalake_download_tasks_pool`
 - `opendatalake_direct_upload_tasks_pool`
 - `opendatalake_import_tasks_pool`
+
+`import_vcf` caps how many VCF extraction pods run at once. Deployed environments use 128; keep
+2 here. Each pod requests 500m CPU with no limit, and pyarrow/cyvcf2 use every core they get, so
+with 128 slots the five sample pods start together on 4 CPUs. The load then passes 13 (it reaches
+23 during the StarRocks inserts), Airflow's own liveness probes time out, and the kubelet restarts
+the scheduler and worker mid-import, which fails every extraction task. With 2 slots the extraction
+takes about 8 minutes. With 6 CPUs there is more headroom, but keep the pool small.
 
 `starrocks_insert_pool` serialises the StarRocks statements in `Radiant - Re-annotate against
 OpenDataLake`. All three of its settings matter, and the **"Include deferred tasks"** checkbox is
@@ -356,7 +466,7 @@ From the CLI instead of the UI:
 kubectl exec deploy/airflow-scheduler -c scheduler -- \
   airflow pools set import_part 1 "Serialise import_part"
 kubectl exec deploy/airflow-scheduler -c scheduler -- \
-  airflow pools set import_vcf 128 "VCF import fan-out"
+  airflow pools set import_vcf 2 "VCF import fan-out (2 in the sandbox: 4 CPUs)"
 kubectl exec deploy/airflow-scheduler -c scheduler -- \
   airflow pools set starrocks_insert_pool 1 "Serialise StarRocks inserts" --include-deferred
 
@@ -375,6 +485,7 @@ Trigger the following dags in order. Each dag takes a few minutes to run. Wait f
 1. Trigger dag `[QA] Radiant - Init Simulated Clinical Data`
    - Set vcf_bucket_prefix to `s3://vcf`
 2. Trigger dag `Radiant - Init StarRocks Base Tables` (~ 2 minutes)
+   - Set `udf_release_version` to `v2.0.0`. **Do not keep the default `v1.2.0`** (see below).
 3. Trigger dag  `Radiant - Init Iceberg Tables` (~ 1 minutes)
 4. Trigger dag `Radiant - Import Open Data` (~ 5 minutes)
    - Leave `skip_legacy_tables` unchecked.
@@ -383,6 +494,74 @@ Trigger the following dags in order. Each dag takes a few minutes to run. Wait f
 5. Trigger dag `Radiant - Scheduled Import` (~ 5 minutes)
 
 The last step of Radiant - Scheduled Import will fail — this is expected: it triggers Radiant - Data Integrity Checks, which flags the (deliberately imperfect) sandbox test data.
+
+### `udf_release_version` must be `v2.0.0`
+
+`Init StarRocks Base Tables` installs the StarRocks UDFs `GET_VARIANT_ID` and `GET_CNV_ID` from
+[radiant-starrocks-udf](https://github.com/radiant-network/radiant-starrocks-udf) releases. The
+CNV insert now passes the resolved CNV type (`LOSS`, `GAIN`) to `GET_CNV_ID`, which only v2.0.0
+understands; v1.2.0 only knows the VCF alternate (`<DEL>`) and returns `NULL` for `LOSS`. The DAG
+still defaults to `v1.2.0`, so with the default the germline CNV insert fails with:
+```
+Insert has filtered data ... NULL value in non-nullable column 'cnv_id'
+```
+(read the rejected rows with the `select tracking_log from information_schema.load_tracking_logs
+where job_id=...` query printed in the task log). v2.0.0 changes nothing for `GET_VARIANT_ID`.
+
+To fix an already-initialised sandbox without re-running the DAG, replace the function with the
+DAG's own statement (`radiant-portal-pipeline/radiant/dags/sql/radiant/init/cnv_id_udf.sql`), then
+clear the failed import tasks:
+```
+kubectl exec -i deploy/radiant-starrocks-fe -- mysql -h127.0.0.1 -P9030 -uroot <<'SQL'
+CREATE OR REPLACE GLOBAL FUNCTION GET_CNV_ID (string, bigint, bigint, string) RETURNS bigint
+PROPERTIES (
+  "symbol" = "org.radiant.CNVIdUDF",
+  "type" = "StarrocksJar",
+  "file" = "https://github.com/radiant-network/radiant-starrocks-udf/releases/download/v2.0.0/radiant-starrocks-udf-2.0.0-jar-with-dependencies.jar"
+);
+SQL
+# Must return two ids, not NULL
+kubectl exec deploy/radiant-starrocks-fe -- mysql -h127.0.0.1 -P9030 -uroot -N -e \
+  "SELECT GET_CNV_ID('1', 4063594, 1199, 'LOSS'), GET_CNV_ID('1', 13224579, 17455, 'GAIN')"
+```
+
+### Expected failure: mark the somatic CNV of case TCRBOA6 as success
+
+The simulated clinical data (`radiant-portal-pipeline/radiant/dags/sql/clinical/seeds.sql`)
+references `s3://vcf/TCRBOA6_SRX1166091-T.cnv.vcf.gz` (and its `.tbi`). That file is known to be
+problematic and is deliberately not shipped in `data/vcf/`, so `import_somatic_cnv_vcf_k8s` fails
+with `S3DownloadError … 404`. Because `radiant-import-part` waits for every VCF import, **nothing**
+is inserted into StarRocks until that task is resolved.
+
+This is the expected procedure, confirmed by the team: mark the task as success by hand.
+1. In the Airflow UI, open `radiant-import-part` and select the failed run.
+2. Click the `import_somatic_cnv_vcf_k8s` task and mark it **Success**, for that task only. Do
+   **not** tick "Downstream": that would mark the waiting insert tasks as success without running
+   them, and nothing would reach StarRocks.
+3. Then clear the run's remaining failed tasks (the `upstream_failed` inserts) so they run: on the
+   run, **Clear → Only failed**.
+
+Everything except that one somatic CNV gets imported.
+
+The same from the CLI, for scripting:
+```
+RUN='<run_id of the failed radiant-import-part run>'
+kubectl exec deploy/airflow-scheduler -c scheduler -- python -c "
+from airflow.models import TaskInstance as TI
+from airflow.utils.session import create_session
+with create_session() as s:
+    ti = s.query(TI).filter(TI.dag_id=='radiant-import-part', TI.run_id=='$RUN',
+                            TI.task_id=='import_somatic_cnv_vcf_k8s').one()
+    ti.state = 'success'; s.merge(ti)"
+# then, with the run's logical date (shown by `airflow dags list-runs radiant-import-part`):
+kubectl exec deploy/airflow-scheduler -c scheduler -- airflow tasks clear radiant-import-part \
+  --only-failed --start-date <logical_date> --end-date <logical_date> --yes
+```
+
+To re-run only what failed in an import (for example after fixing the UDF), use the same
+`airflow tasks clear … --only-failed` call; add `--downstream` when the failed tasks are upstream
+of others. Triggering a new `Radiant - Scheduled Import` instead may find nothing left to import,
+since the failed run already took the sequencing experiments.
 
 ## Edit /etc/host file 
 Add the following line to your /etc/hosts file to access the keycloak admin console:
@@ -420,6 +599,29 @@ Click on `Assign Roles`, then select `Client Roles`.
 
 Select `radiant` in the table and then click on `Assign` Button.
 
+## Give the user roles in the portal
+
+A Keycloak account alone only gets you to a 403 page, "Vous n'avez pas accès à RADIANT": the portal
+is multi-tenant and reads each user's roles from the `user_role` table of the `radiant` Postgres
+database. Grant them with the toolbox's `create-user`, using the user's Keycloak ID (*Users* → the
+user → *ID*):
+```
+SUB=<keycloak user id>
+kubectl run create-user --rm -i --restart=Never --image=radiant-local-toolbox:latest \
+  --overrides='{"spec":{"containers":[{"name":"create-user","image":"radiant-local-toolbox:latest",
+    "imagePullPolicy":"Never","envFrom":[{"secretRef":{"name":"radiant-toolbox-secret"}}],
+    "command":["create-user","-sub","'"$SUB"'",
+      "-grant","radiant:*:member","-grant","radiant:*:geneticist",
+      "-grant","radiant:*:data_manager","-grant","radiant::tenant_admin"]}]}}'
+```
+A grant is `tenant:org:role`; `*` means every organization of the tenant, and an empty org a
+tenant-wide role. `member` lets the user search cases, `geneticist` interpret variants,
+`data_manager` import data, and `tenant_admin` manage members. Without Ranger the command ends with
+a `ranger: …` error after the roles are granted (see [Install Ranger (optional)](#install-ranger-optional)).
+
+Once a user has `tenant_admin`, further members can be added from the portal's admin section. They
+get no password: set one in the Keycloak console (*Credentials* → *Set password*, *Temporary* off).
+
 ## Connect to Radiant Portal UI
 Open a new browser tab and go to http://localhost:3000
 
@@ -427,6 +629,52 @@ You should be redirected to keycloak login page. Put the username and password y
 Then you should be able to see the case list page.
 
 If you click on Case 1 (Family trio) or case 8 (Solo), you should be able to click on Variants tab and see the variants for the case.
+
+## After a restart or laptop sleep
+
+Putting the laptop to sleep can leave the cluster unresponsive: Docker Desktop restarts the
+`minikube` container on new host ports, but the kubelet does not come back. `minikube status` shows:
+```
+kubelet: Stopped
+apiserver: Stopped
+kubeconfig: Misconfigured
+```
+Run `minikube start` (not `minikube delete`, which wipes all volumes). Pods show `Error` for a few
+minutes after any restart, then recover on their own.
+
+After every `minikube start`, whether after sleep or not, redo these steps in order:
+1. Point kubectl back at the namespace: `kubectl config set-context --current --namespace=radiant`.
+2. Stop the old `minikube tunnel` and `minikube mount` processes with Ctrl+C, then start them again,
+   each in its own terminal. They keep running after a restart but no longer work.
+3. Restart the Airflow pods, which started before the mounts existed and see an empty DAG folder:
+   ```
+   kubectl rollout restart deploy/airflow-dag-processor deploy/airflow-scheduler \
+     statefulset/airflow-worker statefulset/airflow-triggerer
+   ```
+
+## Browsing the data
+
+Polaris has no web UI: port 8181 serves the Iceberg REST and management APIs, and port 8182 serves
+health and metrics (`/q/health`, `/q/metrics`). To look at the data:
+- **StarRocks**, with any MySQL client (DBeaver, `mysql`): `localhost:9030`, user `root`, no
+  password. With DBeaver's MySQL driver, set the driver properties `allowPublicKeyRetrieval=true`
+  and `useSSL=false`. The Iceberg tables in Polaris are only reachable through SQL, not the
+  navigator tree:
+  ```
+  SHOW CATALOGS;
+  SHOW TABLES FROM radiant_iceberg_catalog.radiant;
+  ```
+- **Postgres**: `localhost:5432`, `postgres` / `postgres`. In DBeaver, tick *Show all databases* to
+  see `airflow`, `radiant`, `polaris` and `keycloak`.
+- **RustFS console** (files behind the tables): http://localhost:9001, `admin` / `password`.
+- **Polaris API** with `curl`. Every call needs the `Polaris-Realm: radiant` header:
+  ```
+  TOKEN=$(curl -s -X POST http://localhost:8181/api/catalog/v1/oauth/tokens \
+    -H "Polaris-Realm: radiant" -d grant_type=client_credentials \
+    -d client_id=root -d client_secret=password -d scope=PRINCIPAL_ROLE:ALL | jq -r .access_token)
+  curl -s -H "Authorization: Bearer $TOKEN" -H "Polaris-Realm: radiant" \
+    http://localhost:8181/api/catalog/v1/polaris/namespaces/radiant/tables | jq
+  ```
 
 ## Open Data Lake integration
 
