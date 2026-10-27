@@ -30,10 +30,8 @@ minikube config set cpus 4
 minikube config set container-runtime docker
 ```
 
-4 CPUs is the minimum, and the stack saturates them during an import: the load reaches 10 to 23,
-and the kubelet restarts Airflow components (and, before its probe was fixed, Postgres) whose
-liveness probes time out. If Docker has more to give, set `cpus 6` instead. The pool sizes under
-[Configure airflow](#configure-airflow) are what keep an import working on 4.
+4 CPUs is the minimum, and an import saturates them. If Docker has more to give, set `cpus 6`
+instead (see [Configure airflow](#configure-airflow) for what keeps an import working on 4).
 
 **The container runtime must be `docker`.** Every image in this sandbox is built with
 `eval $(minikube docker-env) && docker build …`, which needs a real Docker Engine inside the VM.
@@ -44,12 +42,6 @@ ERROR: failed to build: failed to inspect pulled image moby/buildkit:buildx-stab
 Check the `RUNTIME` column of `minikube profile list`. These settings only apply when the cluster is
 created, so changing them on an existing cluster means `minikube delete && minikube start`, which
 wipes all volumes.
-
-Add the Airflow Helm chart repository (once per machine):
-```
-helm repo add apache-airflow https://airflow.apache.org
-helm repo update apache-airflow
-```
 
 # Installation
 
@@ -384,7 +376,12 @@ Before installing, check that:
 - the task operator, dbt operator and toolbox images are built (`eval $(minikube -p minikube docker-env) && docker images | grep radiant`);
 - the Airflow volumes above are applied;
 - the DAG mount (and the Open Data Lake one, if you use it) is running in its own terminal;
-- the `apache-airflow` Helm repository is added (see [Requirements](#requirements)).
+- the `apache-airflow` Helm repository is added (once per machine, otherwise `helm install` fails
+  with `repo apache-airflow not found`):
+  ```
+  helm repo add apache-airflow https://airflow.apache.org
+  helm repo update apache-airflow
+  ```
 
 - Build the docker image, from the root of this repository:
   ```
@@ -450,9 +447,10 @@ Only if you are testing the Open Data Lake integration, create these three as we
 
 `import_vcf` caps how many VCF extraction pods run at once. Deployed environments use 128; keep
 2 here. Each pod requests 500m CPU with no limit, and pyarrow/cyvcf2 use every core they get, so
-with 128 slots the five sample pods start together on 4 CPUs. The load then passes 13, Airflow's
-own liveness probes time out, and the kubelet restarts the scheduler and worker mid-import, which
-fails every extraction task. With 2 slots the extraction takes about 8 minutes.
+with 128 slots the five sample pods start together on 4 CPUs. The load then passes 13 (it reaches
+23 during the StarRocks inserts), Airflow's own liveness probes time out, and the kubelet restarts
+the scheduler and worker mid-import, which fails every extraction task. With 2 slots the extraction
+takes about 8 minutes. With 6 CPUs there is more headroom, but keep the pool small.
 
 `starrocks_insert_pool` serialises the StarRocks statements in `Radiant - Re-annotate against
 OpenDataLake`. All three of its settings matter, and the **"Include deferred tasks"** checkbox is
