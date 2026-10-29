@@ -238,7 +238,7 @@ unreachable host with a low attempt cap and confirm it exits non-zero instead of
 ## Editing guidance
 
 - **Manifests are the contract.** Most work is YAML tweaks under `k8s/*/` or `values/`. Image tags and env vars (`RADIANT_TASK_OPERATOR_IMAGE`, `OPENDATALAKE_SPARK_IMAGE`) are the usual knobs.
-- **Version pins live in two places.** The Airflow image tag is set in both `docker/airflow3/Dockerfile` (`apache/airflow:3.2.1-python3.12`, plus `requirements-airflow.txt` and the matching `constraints-python3.12.txt`) and `values/airflow3-values.yaml` (`defaultAirflowTag`, `airflowVersion`, `images.airflow.tag`). Bumping one alone silently deploys the wrong image. Same pattern for StarRocks `4.0.13` across the FE, CN, and init manifests.
+- **Version pins live in two places.** The Airflow image tag is set in both `docker/airflow3/Dockerfile` (`apache/airflow:3.3.1-python3.12`, plus `requirements-airflow.txt` and the matching `constraints-python3.12.txt`) and `values/airflow3-values.yaml` (`defaultAirflowTag`, `airflowVersion`, `images.airflow.tag`). Bumping one alone silently deploys the wrong image. Same pattern for StarRocks `4.0.13` across the FE, CN, and init manifests.
 - **Locally-built images must exist before deploy.** `radiant-airflow3`, `radiant-airflow-task-operator`, `radiant-airflow-dbt-operator`, and `radiant-local-toolbox` are built into Minikube's docker daemon, never pulled. Tags in `values/airflow3-values.yaml` must match the tags used at build time. `ghcr.io/radiant-network/radiant-toolbox` is not pullable anonymously, so the toolbox is built from `../radiant-portal/backend/toolbox.Dockerfile` (context `../radiant-portal/backend`).
 - **Airflow memory tuning is coupled.** `RADIANT_PARQUET_FILE_SIZE_MB` (64MB, down from the 500MB default) is what makes the SNV extraction pods fit in `RADIANT_TASK_OPERATOR_SNV_MEMORY_LIMIT: 1Gi`. Raise one and you must raise the other, or tasks OOMKill (exit 137). Sandbox-only — the 500MB default sits just under Iceberg's `WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT` and lowering it in a real deployment produces many small parquet files.
 - **Don't change install order** unless the dependency assumptions in the init jobs change with it (e.g. `polaris-init-tables` waits on the catalog job, which waits on Postgres + Polaris; RustFS must already hold the seed parquet).
@@ -335,10 +335,11 @@ Things that bite:
   the same 12GB Minikube. Raise `OPENDATALAKE_SPARK_MEMORY*` and `OPENDATALAKE_SPARK_DRIVER_MEMORY`
   together if an import OOMKills (exit 137).
 - **No Airflow image change was needed.** The Open Datalake DAGs import `airflow.providers.amazon`
-  at parse time, but `apache/airflow:3.2.1-python3.12` already bundles it at 9.25.0 — the exact
-  version `constraints-python3.12.txt` pins (29 providers ship in that image). Verify after a
+  at parse time, but the base image already bundles it: `amazon` is in the official image's default
+  `AIRFLOW_EXTRAS`, installed at the version `constraints-python3.12.txt` pins (9.34.0 for 3.3.1;
+  it was 9.25.0 on 3.2.1, measured). Verify after a
   base-image bump rather than assuming, with
-  `docker run --rm --user airflow --entrypoint python apache/airflow:3.2.1-python3.12 -c "import importlib.metadata as m; print(m.version('apache-airflow-providers-amazon'))"`.
+  `docker run --rm --user airflow --entrypoint python apache/airflow:3.3.1-python3.12 -c "import importlib.metadata as m; print(m.version('apache-airflow-providers-amazon'))"`.
   Note the image's entrypoint is `airflow`, so `docker run … pip show …` silently runs
   `airflow pip show` instead — use `--entrypoint`.
 - **Two DAG mounts now.** `radiant-portal-pipeline/radiant` and

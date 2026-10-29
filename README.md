@@ -386,7 +386,7 @@ Before installing, check that:
 - Build the docker image, from the root of this repository:
   ```
   eval $(minikube -p minikube docker-env)
-  docker build -t ghcr.io/radiant-network/radiant-airflow3:1.0.10 docker/airflow3
+  docker build -t ghcr.io/radiant-network/radiant-airflow3:1.0.11 docker/airflow3
   ```
 - Install via helm, still from the root of this repository (`values/` is a path relative to it):
   ```

@@ -1,8 +1,8 @@
 executor: "CeleryExecutor"
 # Default airflow tag to deploy
-defaultAirflowTag: "3.2.1"
+defaultAirflowTag: "3.3.1"
 # Airflow version (Used to make some decisions based on Airflow Version being deployed)
-airflowVersion: "3.2.1"
+airflowVersion: "3.3.1"
 apiServer:
   service:
     type: LoadBalancer
@@ -33,7 +33,7 @@ logs:
 images:
   airflow:
     repository: ghcr.io/radiant-network/radiant-airflow3
-    tag: 1.0.10
+    tag: 1.0.11
     pullPolicy: IfNotPresent
 
 data:
