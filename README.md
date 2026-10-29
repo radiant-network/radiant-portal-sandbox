@@ -383,10 +383,13 @@ Before installing, check that:
   helm repo update apache-airflow
   ```
 
-- Build the docker image, from the root of this repository:
+- Build the docker image, from the root of this repository. The tag must be the `images.airflow.tag`
+  value in `values/airflow3-values.yaml`: the chart pulls with `IfNotPresent`, so any other tag is not
+  found, and reusing an old tag keeps the old image. Use a new tag after you change `docker/airflow3/`.
   ```
+  TAG=<images.airflow.tag from values/airflow3-values.yaml>
   eval $(minikube -p minikube docker-env)
-  docker build -t ghcr.io/radiant-network/radiant-airflow3:1.0.10 docker/airflow3
+  docker build -t ghcr.io/radiant-network/radiant-airflow3:$TAG docker/airflow3
   ```
 - Install via helm, still from the root of this repository (`values/` is a path relative to it):
   ```

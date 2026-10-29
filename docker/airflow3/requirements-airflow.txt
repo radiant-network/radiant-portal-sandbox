@@ -1,13 +1,15 @@
 # Minimal Airflow runtime needed
-
-apache-airflow==3.2.1
-apache-airflow-providers-cncf-kubernetes==10.16.0
+# Airflow 3 splits the distribution: `apache-airflow` is a meta-package, so with `--no-deps` core and task-sdk are listed too.
+apache-airflow==3.3.1
+apache-airflow-core==3.3.1
+apache-airflow-task-sdk==1.3.1
+apache-airflow-providers-cncf-kubernetes==10.21.0
 attrs==26.1.0
-boto3==1.42.84
-packaging==26.1
-pydantic==2.13.1
-typing_extensions==4.15.0
-SQLAlchemy==2.0.49
+boto3==1.43.56
+packaging==26.3
+pydantic==2.13.4
+typing_extensions==4.16.0
+SQLAlchemy==2.0.51
 tabulate==0.10.0
 Werkzeug==3.1.8
 Flask==3.1.3
