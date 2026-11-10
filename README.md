@@ -695,11 +695,17 @@ user granted with `create-user`.
     -s 'config."id.token.claim"=false' -s 'config."introspection.token.claim"=true'
   ```
 
-To switch back to native access control, re-apply the base manifests:
+To switch back to native access control (Ranger can then be scaled to 0):
 ```
-kubectl apply -f k8s/starrocks/radiant-starrocks-fe-deployment.yaml -f k8s/api/radiant-api-deployments.yml
+kubectl apply -f k8s/starrocks/radiant-starrocks-fe-deployment.yaml
+kubectl patch deploy/radiant-starrocks-fe --patch-file k8s/ranger/enforce/radiant-starrocks-fe-ranger-revert.yaml
+kubectl patch deploy/radiant-api --patch-file k8s/ranger/enforce/radiant-api-proxy-revert.yaml
 ```
-Re-applying either file for another reason also drops the patch; patch it again afterwards.
+Re-applying the base manifests alone is not enough: `kubectl apply` only removes fields it set
+itself, so the API keeps its proxy sidecar and `STARROCKS_PROXY_READ_ENABLED`, and the FE keeps the
+plugin mounts. The apply does restore the FE's start command, so applying
+`k8s/starrocks/radiant-starrocks-fe-deployment.yaml` for another reason silently turns Ranger off on
+the FE while the API still reads through the proxy; patch the FE again afterwards.
 
 ## After a restart or laptop sleep
 

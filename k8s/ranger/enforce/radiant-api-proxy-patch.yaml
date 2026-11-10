@@ -3,7 +3,8 @@
 # tenant access, row filters and PII masks in the portal. Requires the FE patch
 # (radiant-starrocks-fe-ranger-patch.yaml: access_control = ranger + SSL) first.
 #   kubectl patch deploy/radiant-api --patch-file k8s/ranger/enforce/radiant-api-proxy-patch.yaml
-# Revert: kubectl apply -f k8s/api/radiant-api-deployments.yml
+# Revert: kubectl patch deploy/radiant-api --patch-file k8s/ranger/enforce/radiant-api-proxy-revert.yaml
+# (re-applying k8s/api/ does not remove what this patch added).
 #
 # mysql-proxy is a native sidecar (init container with restartPolicy Always): it accepts the API's
 # cleartext login on loopback (JWT as the password) and performs the TLS + OIDC handshake to

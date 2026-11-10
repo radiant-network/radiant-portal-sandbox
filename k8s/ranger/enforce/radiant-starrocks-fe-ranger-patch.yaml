@@ -1,7 +1,8 @@
 # Strategic-merge patch switching the StarRocks FE to `access_control = ranger`.
 #   kubectl apply -f k8s/ranger/enforce/radiant-starrocks-ranger-plugin-configmap.yaml
 #   kubectl patch deploy/radiant-starrocks-fe --patch-file k8s/ranger/enforce/radiant-starrocks-fe-ranger-patch.yaml
-# Revert: kubectl apply -f k8s/starrocks/radiant-starrocks-fe-deployment.yaml
+# Revert: kubectl apply -f k8s/starrocks/radiant-starrocks-fe-deployment.yaml, then
+#         kubectl patch deploy/radiant-starrocks-fe --patch-file k8s/ranger/enforce/radiant-starrocks-fe-ranger-revert.yaml
 #
 # `args` is replaced wholesale by a strategic merge, so it repeats the base deployment's start
 # command -- keep the two in sync.
