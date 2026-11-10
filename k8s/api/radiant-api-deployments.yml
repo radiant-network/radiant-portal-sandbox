@@ -61,6 +61,14 @@ spec:
               value: admin
             - name: RANGER_ADMIN_PASSWORD
               value: rangerR0cks!
+            # Baked into the StarRocks JWT user created when a member is added. Same values in
+            # k8s/toolbox/radiant-toolbox-secret.yaml.
+            - name: STARROCKS_JWT_JWKS_URL
+              value: http://radiant-keycloak:8282/realms/Radiant/protocol/openid-connect/certs
+            - name: STARROCKS_JWT_REQUIRED_ISSUER
+              value: http://radiant-keycloak:8282/realms/Radiant
+            - name: STARROCKS_JWT_REQUIRED_AUDIENCE
+              value: radiant
             - name: PUBMED_BASE_URL
               value: https://api.ncbi.nlm.nih.gov
             - name: CORS_ALLOWED_ORIGINS

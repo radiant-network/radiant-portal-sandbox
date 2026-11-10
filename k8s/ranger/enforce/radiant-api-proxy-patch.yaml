@@ -1,0 +1,50 @@
+# Strategic-merge patch making the API read StarRocks AS THE CALLING USER, as in QA
+# (qlin-qa-infra/kubernetes-manifests/apps/radiant-api/deployment.yaml), so Ranger applies per-user
+# tenant access, row filters and PII masks in the portal. Requires the FE patch
+# (radiant-starrocks-fe-ranger-patch.yaml: access_control = ranger + SSL) first.
+#   kubectl patch deploy/radiant-api --patch-file k8s/ranger/enforce/radiant-api-proxy-patch.yaml
+# Revert: kubectl apply -f k8s/api/radiant-api-deployments.yml
+#
+# mysql-proxy is a native sidecar (init container with restartPolicy Always): it accepts the API's
+# cleartext login on loopback (JWT as the password) and performs the TLS + OIDC handshake to
+# StarRocks. No STARROCKS_SSL_CA: the FE's certificate is self-signed and regenerated on every start,
+# so the proxy skips verification (its documented dev mode). Never expose 9031 through a Service.
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: mysql-proxy
+          image: ghcr.io/radiant-network/radiant-mysql-proxy:latest
+          restartPolicy: Always
+          env:
+            - name: LISTEN_ADDR
+              value: 127.0.0.1:9031
+            - name: STARROCKS_ADDR
+              value: radiant-starrocks-fe:9030
+            - name: PROBE_PORT
+              value: "9998"
+          startupProbe:
+            httpGet:
+              path: /status
+              port: 9998
+            periodSeconds: 3
+            failureThreshold: 20
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 9998
+            initialDelaySeconds: 5
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+      containers:
+        - name: api
+          env:
+            - name: STARROCKS_PROXY_READ_ENABLED
+              value: "true"
+            - name: STARROCKS_PROXY_ADDR
+              value: 127.0.0.1:9031

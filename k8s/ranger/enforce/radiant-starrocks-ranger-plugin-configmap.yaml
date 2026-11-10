@@ -1,0 +1,61 @@
+# Ranger plugin config for the StarRocks FE. Only used when Ranger enforcement is switched on with
+# radiant-starrocks-fe-ranger-patch.yaml; harmless on its own. Mirrors
+# radiant-portal/backend/compose/starrocks-conf/ranger-starrocks-{security,audit}.xml, with the admin
+# URL pointed at the in-cluster service.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: radiant-starrocks-ranger-plugin
+data:
+  ranger-starrocks-security.xml: |
+    <configuration>
+      <property>
+        <name>ranger.plugin.starrocks.service.name</name>
+        <value>starrocks</value>
+      </property>
+      <property>
+        <name>ranger.plugin.starrocks.policy.source.impl</name>
+        <value>org.apache.ranger.admin.client.RangerAdminRESTClient</value>
+      </property>
+      <property>
+        <name>ranger.plugin.starrocks.policy.rest.url</name>
+        <value>http://radiant-ranger:6080</value>
+      </property>
+      <property>
+        <name>ranger.plugin.starrocks.policy.rest.ssl.config.file</name>
+        <value></value>
+      </property>
+      <property>
+        <name>ranger.plugin.starrocks.policy.pollIntervalMs</name>
+        <value>10000</value>
+      </property>
+      <property>
+        <name>ranger.plugin.starrocks.policy.rest.client.connection.timeoutMs</name>
+        <value>30000</value>
+      </property>
+      <property>
+        <name>ranger.plugin.starrocks.policy.rest.client.read.timeoutMs</name>
+        <value>30000</value>
+      </property>
+      <!-- The admin image requires auth on every policy download endpoint, and the registered
+           `starrocks` service sets policy.download.auth.users = rangerusersync. -->
+      <property>
+        <name>ranger.plugin.starrocks.policy.rest.client.username</name>
+        <value>rangerusersync</value>
+      </property>
+      <property>
+        <name>ranger.plugin.starrocks.policy.rest.client.password</name>
+        <value>rangerR0cks!</value>
+      </property>
+      <property>
+        <name>ranger.plugin.starrocks.policy.rest.client.cookie.enabled</name>
+        <value>true</value>
+      </property>
+    </configuration>
+  ranger-starrocks-audit.xml: |
+    <configuration>
+      <property>
+        <name>xasecure.audit.is.enabled</name>
+        <value>false</value>
+      </property>
+    </configuration>

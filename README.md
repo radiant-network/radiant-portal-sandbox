@@ -222,8 +222,10 @@ The image is the one radiant-portal's local stack uses, run as a single pod. It 
 kubectl apply -f k8s/ranger/
 ```
 
-The policies are created in Ranger but **not enforced**: StarRocks keeps its native access control,
-so queries are neither masked nor filtered.
+By default the policies are created in Ranger but **not enforced**: StarRocks keeps its native
+access control, so queries are neither masked nor filtered. To enforce them as QA does, see
+[Enforce Ranger access control, as in QA (optional)](#enforce-ranger-access-control-as-in-qa-optional)
+once the portal works.
 
 ## Monitor Ranger pod is running (3 minutes)
 ```
@@ -632,6 +634,72 @@ You should be redirected to keycloak login page. Put the username and password y
 Then you should be able to see the case list page.
 
 If you click on Case 1 (Family trio) or case 8 (Solo), you should be able to click on Variants tab and see the variants for the case.
+
+## Enforce Ranger access control, as in QA (optional)
+
+In QA and prod, Ranger enforces tenant access, row filters on `auth.*` and PII masks on `patient`,
+because the API reads StarRocks **as the logged-in user**. By default the sandbox reads as `root`,
+which sees everything: a new view, materialized view or table without a Ranger policy works locally
+and only fails in QA with `access denied`. This option reproduces QA's setup in three layers:
+
+| Layer | What it does | File |
+|---|---|---|
+| 1 | StarRocks FE runs `access_control = ranger` | `k8s/ranger/enforce/radiant-starrocks-fe-ranger-patch.yaml` + the plugin ConfigMap |
+| 2 | FE accepts SSL (self-signed, not forced) for the JWT users | same FE patch |
+| 3 | API reads through a `mysql-proxy` sidecar with the user's JWT (`STARROCKS_PROXY_READ_ENABLED`) | `k8s/ranger/enforce/radiant-api-proxy-patch.yaml` |
+
+Once enabled, **every** StarRocks query goes through Ranger, Airflow's and the init jobs' included
+(`root` is covered by Ranger's default `all - *` policies). Keep Ranger running: scaled to 0, StarRocks
+denies everything.
+
+Prerequisites: [Ranger](#install-ranger-optional) running, the toolbox image built, and at least one
+user granted with `create-user`.
+
+1. Switch the FE to Ranger, then wait until it is up again (1-2 minutes):
+   ```
+   kubectl apply -f k8s/ranger/enforce/radiant-starrocks-ranger-plugin-configmap.yaml
+   kubectl patch deploy/radiant-starrocks-fe --patch-file k8s/ranger/enforce/radiant-starrocks-fe-ranger-patch.yaml
+   kubectl logs deploy/radiant-starrocks-fe | grep "Start Ranger plugin"
+   ```
+2. Create the tenant's Ranger roles and policies:
+   ```
+   kubectl run refresh-tenants --rm -i --restart=Never --image=radiant-local-toolbox:latest \
+     --overrides='{"spec":{"containers":[{"name":"refresh-tenants","image":"radiant-local-toolbox:latest",
+       "imagePullPolicy":"Never","envFrom":[{"secretRef":{"name":"radiant-toolbox-secret"}}],
+       "command":["refresh-tenants"]}]}}'
+   ```
+3. Route the API through the proxy:
+   ```
+   kubectl patch deploy/radiant-api --patch-file k8s/ranger/enforce/radiant-api-proxy-patch.yaml
+   ```
+4. Log out of the portal and back in. A user with `geneticist` on some organizations only sees the
+   other organizations' patients with `***` for name, MRN and JHN, and only the year of birth.
+
+**On a sandbox installed before this option**, two things predate it and need a one-time fix:
+- *JWT users created with an empty `jwks_url`.* `create-user` runs `CREATE USER IF NOT EXISTS`, so it
+  never updates them, and the proxy logs `backend auth failed … code 1045`. Fix each one (IDs from
+  `SHOW USERS`):
+  ```
+  kubectl exec deploy/radiant-starrocks-fe -- mysql -h127.0.0.1 -P9030 -uroot -e "ALTER USER '<sub>'@'%' IDENTIFIED WITH authentication_jwt AS '{\"jwks_url\":\"http://radiant-keycloak:8282/realms/Radiant/protocol/openid-connect/certs\",\"principal_field\":\"sub\",\"required_issuer\":\"http://radiant-keycloak:8282/realms/Radiant\",\"required_audience\":\"radiant\"}'"
+  ```
+- *Tokens without the `radiant` audience.* The realm import now adds a `radiant-audience` mapper, but
+  Keycloak imports the realm only on its first start; without it the API logs
+  `Audience (aud) field [account] is invalid`. Add it live:
+  ```
+  K(){ kubectl exec deploy/radiant-keycloak -- /opt/keycloak/bin/kcadm.sh "$@"; }
+  K config credentials --server http://localhost:8282 --realm master --user admin --password admin
+  CID=$(K get clients -r Radiant -q clientId=radiant --fields id --format csv --noquotes | tail -1)
+  K create clients/$CID/protocol-mappers/models -r Radiant -s name=radiant-audience \
+    -s protocol=openid-connect -s protocolMapper=oidc-audience-mapper \
+    -s 'config."included.custom.audience"=radiant' -s 'config."access.token.claim"=true' \
+    -s 'config."id.token.claim"=false' -s 'config."introspection.token.claim"=true'
+  ```
+
+To switch back to native access control, re-apply the base manifests:
+```
+kubectl apply -f k8s/starrocks/radiant-starrocks-fe-deployment.yaml -f k8s/api/radiant-api-deployments.yml
+```
+Re-applying either file for another reason also drops the patch; patch it again afterwards.
 
 ## After a restart or laptop sleep
 
