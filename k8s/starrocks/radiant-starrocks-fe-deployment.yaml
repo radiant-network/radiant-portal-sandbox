@@ -39,7 +39,7 @@ spec:
               echo 'aws_s3_secret_key = password' >> /opt/starrocks/fe/conf/fe.conf
               echo 'enable_udf = true' >> /opt/starrocks/fe/conf/fe.conf
               exec /opt/starrocks/fe/bin/start_fe.sh --host_type FQDN
-          image: starrocks/fe-ubuntu:4.0.13
+          image: starrocks/fe-ubuntu:4.0.16
           livenessProbe:
             exec:
               command:

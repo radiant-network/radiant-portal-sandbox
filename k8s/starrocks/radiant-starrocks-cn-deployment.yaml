@@ -31,7 +31,7 @@ spec:
           env:
             - name: HOST_TYPE
               value: FQDN
-          image: starrocks/cn-ubuntu:4.0.13
+          image: starrocks/cn-ubuntu:4.0.16
           livenessProbe:
             exec:
               command:
