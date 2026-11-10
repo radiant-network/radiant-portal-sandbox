@@ -644,9 +644,9 @@ and only fails in QA with `access denied`. This option reproduces QA's setup in 
 
 | Layer | What it does | File |
 |---|---|---|
-| 1 | StarRocks FE runs `access_control = ranger` | `k8s/ranger/enforce/radiant-starrocks-fe-ranger-patch.yaml` + the plugin ConfigMap |
+| 1 | StarRocks FE runs `access_control = ranger` | `k8s/ranger/enforce/radiant-starrocks-fe-ranger-enable.yaml` + the plugin ConfigMap |
 | 2 | FE accepts SSL (self-signed, not forced) for the JWT users | same FE patch |
-| 3 | API reads through a `mysql-proxy` sidecar with the user's JWT (`STARROCKS_PROXY_READ_ENABLED`) | `k8s/ranger/enforce/radiant-api-proxy-patch.yaml` |
+| 3 | API reads through a `mysql-proxy` sidecar with the user's JWT (`STARROCKS_PROXY_READ_ENABLED`) | `k8s/ranger/enforce/radiant-api-proxy-enable.yaml` |
 
 Once enabled, **every** StarRocks query goes through Ranger, Airflow's and the init jobs' included
 (`root` is covered by Ranger's default `all - *` policies). Keep Ranger running: scaled to 0, StarRocks
@@ -658,7 +658,7 @@ user granted with `create-user`.
 1. Switch the FE to Ranger, then wait until it is up again (1-2 minutes):
    ```
    kubectl apply -f k8s/ranger/enforce/radiant-starrocks-ranger-plugin-configmap.yaml
-   kubectl patch deploy/radiant-starrocks-fe --patch-file k8s/ranger/enforce/radiant-starrocks-fe-ranger-patch.yaml
+   kubectl patch deploy/radiant-starrocks-fe --patch-file k8s/ranger/enforce/radiant-starrocks-fe-ranger-enable.yaml
    kubectl logs deploy/radiant-starrocks-fe | grep "Start Ranger plugin"
    ```
 2. Create the tenant's Ranger roles and policies:
@@ -670,7 +670,7 @@ user granted with `create-user`.
    ```
 3. Route the API through the proxy:
    ```
-   kubectl patch deploy/radiant-api --patch-file k8s/ranger/enforce/radiant-api-proxy-patch.yaml
+   kubectl patch deploy/radiant-api --patch-file k8s/ranger/enforce/radiant-api-proxy-enable.yaml
    ```
 4. Log out of the portal and back in. A user with `geneticist` on some organizations only sees the
    other organizations' patients with `***` for name, MRN and JHN, and only the year of birth.
@@ -698,8 +698,8 @@ user granted with `create-user`.
 To switch back to native access control (Ranger can then be scaled to 0):
 ```
 kubectl apply -f k8s/starrocks/radiant-starrocks-fe-deployment.yaml
-kubectl patch deploy/radiant-starrocks-fe --patch-file k8s/ranger/enforce/radiant-starrocks-fe-ranger-revert.yaml
-kubectl patch deploy/radiant-api --patch-file k8s/ranger/enforce/radiant-api-proxy-revert.yaml
+kubectl patch deploy/radiant-starrocks-fe --patch-file k8s/ranger/enforce/radiant-starrocks-fe-ranger-disable.yaml
+kubectl patch deploy/radiant-api --patch-file k8s/ranger/enforce/radiant-api-proxy-disable.yaml
 ```
 Re-applying the base manifests alone is not enough: `kubectl apply` only removes fields it set
 itself, so the API keeps its proxy sidecar and `STARROCKS_PROXY_READ_ENABLED`, and the FE keeps the

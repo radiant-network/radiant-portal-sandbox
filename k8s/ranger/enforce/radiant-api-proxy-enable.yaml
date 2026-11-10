@@ -1,9 +1,9 @@
 # Strategic-merge patch making the API read StarRocks AS THE CALLING USER, as in QA
 # (qlin-qa-infra/kubernetes-manifests/apps/radiant-api/deployment.yaml), so Ranger applies per-user
 # tenant access, row filters and PII masks in the portal. Requires the FE patch
-# (radiant-starrocks-fe-ranger-patch.yaml: access_control = ranger + SSL) first.
-#   kubectl patch deploy/radiant-api --patch-file k8s/ranger/enforce/radiant-api-proxy-patch.yaml
-# Revert: kubectl patch deploy/radiant-api --patch-file k8s/ranger/enforce/radiant-api-proxy-revert.yaml
+# (radiant-starrocks-fe-ranger-enable.yaml: access_control = ranger + SSL) first.
+#   kubectl patch deploy/radiant-api --patch-file k8s/ranger/enforce/radiant-api-proxy-enable.yaml
+# Revert: kubectl patch deploy/radiant-api --patch-file k8s/ranger/enforce/radiant-api-proxy-disable.yaml
 # (re-applying k8s/api/ does not remove what this patch added).
 #
 # mysql-proxy is a native sidecar (init container with restartPolicy Always): it accepts the API's

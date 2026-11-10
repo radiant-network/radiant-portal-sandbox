@@ -1,5 +1,5 @@
 # Ranger plugin config for the StarRocks FE. Only used when Ranger enforcement is switched on with
-# radiant-starrocks-fe-ranger-patch.yaml; harmless on its own. Mirrors
+# radiant-starrocks-fe-ranger-enable.yaml; harmless on its own. Mirrors
 # radiant-portal/backend/compose/starrocks-conf/ranger-starrocks-{security,audit}.xml, with the admin
 # URL pointed at the in-cluster service.
 apiVersion: v1

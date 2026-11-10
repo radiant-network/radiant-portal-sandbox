@@ -1,6 +1,6 @@
-# Undoes radiant-starrocks-fe-ranger-patch.yaml together with re-applying the base deployment:
+# Undoes radiant-starrocks-fe-ranger-enable.yaml together with re-applying the base deployment:
 #   kubectl apply -f k8s/starrocks/radiant-starrocks-fe-deployment.yaml
-#   kubectl patch deploy/radiant-starrocks-fe --patch-file k8s/ranger/enforce/radiant-starrocks-fe-ranger-revert.yaml
+#   kubectl patch deploy/radiant-starrocks-fe --patch-file k8s/ranger/enforce/radiant-starrocks-fe-ranger-disable.yaml
 # The apply restores the start command (no access_control, no SSL); it cannot remove the plugin
 # volume and mounts, which `kubectl patch` added outside its last-applied annotation. This does.
 spec:
