@@ -106,6 +106,17 @@ extraEnv: |
     value: "radiant-local-toolbox:latest"
   - name: RADIANT_TASK_OPERATOR_PYTHONPATH
     value: "/opt/radiant"
+  # Where radiant-import-igv-tracks writes the 11 IGV public tracks; same value as
+  # IGV_PUBLIC_TRACKS_PREFIX on the API (k8s/api/radiant-api-deployments.yml). The vcf bucket
+  # carries the portal CORS rule (k8s/rustfs/radiant-rustfs-bucket-init-job.yaml).
+  - name: RADIANT_IGV_TRACKS_S3_PREFIX
+    value: "s3://vcf/igv/"
+  # The DAG runs up to 4 track pods at once, each requesting 1 CPU (plus 16Gi ephemeral storage,
+  # which this VM's disk has room for). Four full CPUs never fit next to StarRocks and Airflow on
+  # the 4-CPU VM, and a pod left Pending past the operator's startup timeout fails the task. The
+  # work is mostly download and sort, so a quarter CPU each is enough.
+  - name: RADIANT_TASK_OPERATOR_IGV_TRACKS_CPU
+    value: "250m"
   - name: RADIANT_DBT_S3_WORKSPACE
     value: "warehouse"
   # Shrink the TableAccumulator flush threshold, which is what sets an extraction task's memory

@@ -37,6 +37,20 @@ spec:
                   echo "Bucket $b created"
                 fi
               done
+              # CORS on vcf, same rule as QA's portal buckets (qlin-qa-infra terraform/lustre/buckets.tf):
+              # the portal (localhost:3000) hands the browser presigned URLs -- IGV public tracks under
+              # s3://vcf/igv/, case VCFs, documents -- that it fetches cross-origin with Range requests.
+              # Without it RustFS returns no Access-Control-* header and IGV fails silently. put-bucket-cors
+              # replaces the whole configuration, so a re-run is idempotent.
+              cat > /tmp/cors.json <<'EOF'
+              {"CORSRules": [{"AllowedMethods": ["GET", "HEAD"],
+                              "AllowedOrigins": ["http://localhost:3000"],
+                              "AllowedHeaders": ["*"],
+                              "ExposeHeaders": ["ETag", "Content-Length", "Content-Range", "Accept-Ranges"]}]}
+              EOF
+              aws --endpoint-url "$AWS_ENDPOINT_URL" s3api put-bucket-cors --bucket vcf \
+                --cors-configuration file:///tmp/cors.json
+              echo "CORS set on vcf"
               aws --endpoint-url "$AWS_ENDPOINT_URL" s3api list-buckets \
                 --query 'Buckets[].Name' --output text
           env:
@@ -51,7 +65,8 @@ spec:
 # Buckets, and who writes them:
 #   starrocks        StarRocks shared-data storage volume (all internal tables)
 #   warehouse        Iceberg warehouse for the `polaris` catalog + the seed parquet/VCF input
-#   vcf              seed VCFs read by the Radiant import DAGs
+#   vcf              seed VCFs read by the Radiant import DAGs, and the IGV public tracks under igv/
+#                    (radiant-import-igv-tracks; IGV_PUBLIC_TRACKS_PREFIX on the API). CORS for the portal.
 #   opendatalake-dev Open Datalake raw landing (raw/landing/<source>/<version>) + Iceberg
 #                    warehouse (iceberg/reference)
 #
