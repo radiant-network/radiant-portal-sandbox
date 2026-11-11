@@ -1,0 +1,17 @@
+# Undoes radiant-api-proxy-enable.yaml: the API reads StarRocks as root again.
+#   kubectl patch deploy/radiant-api --patch-file k8s/ranger/enforce/radiant-api-proxy-disable.yaml
+# `kubectl apply -f k8s/api/` is NOT enough: apply only removes fields it set itself (tracked in
+# its last-applied annotation), so the sidecar and the env vars added by `kubectl patch` survive it.
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: mysql-proxy
+          $patch: delete
+      containers:
+        - name: api
+          env:
+            - name: STARROCKS_PROXY_READ_ENABLED
+              $patch: delete
+            - name: STARROCKS_PROXY_ADDR
+              $patch: delete

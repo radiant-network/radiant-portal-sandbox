@@ -1,0 +1,51 @@
+# Strategic-merge patch switching the StarRocks FE to `access_control = ranger`.
+#   kubectl apply -f k8s/ranger/enforce/radiant-starrocks-ranger-plugin-configmap.yaml
+#   kubectl patch deploy/radiant-starrocks-fe --patch-file k8s/ranger/enforce/radiant-starrocks-fe-ranger-enable.yaml
+# Revert: kubectl apply -f k8s/starrocks/radiant-starrocks-fe-deployment.yaml, then
+#         kubectl patch deploy/radiant-starrocks-fe --patch-file k8s/ranger/enforce/radiant-starrocks-fe-ranger-disable.yaml
+#
+# `args` is replaced wholesale by a strategic merge, so it repeats the base deployment's start
+# command -- keep the two in sync.
+spec:
+  template:
+    spec:
+      containers:
+        - name: radiant-starrocks-fe
+          args:
+            - bash
+            - -c
+            - |
+              echo 'run_mode = shared_data' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'cloud_native_storage_type = S3' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'aws_s3_path = starrocks/' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'aws_s3_region = us-east-1' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'aws_s3_endpoint = http://radiant-rustfs:9000' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'aws_s3_access_key = admin' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'aws_s3_secret_key = password' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'enable_udf = true' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'access_control = ranger' >> /opt/starrocks/fe/conf/fe.conf
+              # SSL for the MySQL protocol: mysql-proxy always dials StarRocks over TLS, and the
+              # JWT users authenticate through it. Self-signed and regenerated on every start --
+              # fine because the proxy runs without STARROCKS_SSL_CA (no verification). Not
+              # forced (ssl_force_secure_transport stays false): Airflow, dbt and the init jobs
+              # keep connecting in plaintext as root.
+              mkdir -p /opt/starrocks/fe/certs
+              keytool -genkeypair -noprompt -alias starrocks -keyalg RSA -keysize 2048 -validity 3650 \
+                -dname CN=radiant-starrocks-fe -ext SAN=dns:radiant-starrocks-fe,dns:localhost,ip:127.0.0.1 \
+                -storetype JKS -keystore /opt/starrocks/fe/certs/starrocks_keystore.jks \
+                -storepass changeit -keypass changeit
+              echo 'ssl_keystore_location = /opt/starrocks/fe/certs/starrocks_keystore.jks' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'ssl_keystore_password = changeit' >> /opt/starrocks/fe/conf/fe.conf
+              echo 'ssl_key_password = changeit' >> /opt/starrocks/fe/conf/fe.conf
+              exec /opt/starrocks/fe/bin/start_fe.sh --host_type FQDN
+          volumeMounts:
+            - name: ranger-plugin
+              mountPath: /opt/starrocks/fe/conf/ranger-starrocks-security.xml
+              subPath: ranger-starrocks-security.xml
+            - name: ranger-plugin
+              mountPath: /opt/starrocks/fe/conf/ranger-starrocks-audit.xml
+              subPath: ranger-starrocks-audit.xml
+      volumes:
+        - name: ranger-plugin
+          configMap:
+            name: radiant-starrocks-ranger-plugin
