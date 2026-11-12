@@ -69,6 +69,27 @@ spec:
               value: http://radiant-keycloak:8282/realms/Radiant
             - name: STARROCKS_JWT_REQUIRED_AUDIENCE
               value: radiant
+            # RustFS, for the presigned URLs the browser opens (IGV tracks, case VCFs, document
+            # downloads) and for HeadObject from this pod. The endpoint host is signed into every
+            # URL, so it must resolve on both sides: cluster DNS here, `127.0.0.1 radiant-rustfs`
+            # in /etc/hosts for the browser (through `minikube tunnel` on 9000). localhost:9000
+            # would sign fine but HeadObject from the pod could not reach it.
+            - name: AWS_ENDPOINT_URL
+              value: http://radiant-rustfs:9000
+            - name: AWS_REGION
+              value: us-east-1
+            - name: AWS_ACCESS_KEY_ID
+              value: admin
+            - name: AWS_SECRET_ACCESS_KEY
+              value: password
+            # Defaults to true; RustFS serves plain HTTP.
+            - name: AWS_USE_SSL
+              value: "false"
+            # Written by the radiant-import-igv-tracks DAG; same value as RADIANT_IGV_TRACKS_S3_PREFIX
+            # in values/airflow3-values.yaml. Must be s3:// or the API refuses to start; until the DAG
+            # has run, IGV lists the tracks but their files 404.
+            - name: IGV_PUBLIC_TRACKS_PREFIX
+              value: s3://vcf/igv/
             - name: PUBMED_BASE_URL
               value: https://api.ncbi.nlm.nih.gov
             - name: CORS_ALLOWED_ORIGINS

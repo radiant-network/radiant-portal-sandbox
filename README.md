@@ -569,10 +569,15 @@ of others. Triggering a new `Radiant - Scheduled Import` instead may find nothin
 since the failed run already took the sequencing experiments.
 
 ## Edit /etc/host file 
-Add the following line to your /etc/hosts file to access the keycloak admin console:
+Add the following lines to your /etc/hosts file:
 ```
 127.0.0.1  radiant-keycloak
+127.0.0.1  radiant-rustfs
 ```
+`radiant-keycloak` is for the login redirects and the Keycloak admin console. `radiant-rustfs` is for
+the presigned URLs the API hands the browser (IGV tracks, case VCFs, document downloads): the API
+signs them with the in-cluster host `radiant-rustfs:9000`, which `minikube tunnel` serves on
+`127.0.0.1:9000`.
 
 ## Create user in keycloak 
 Log into keycloak admin console for creating a user
@@ -634,6 +639,29 @@ You should be redirected to keycloak login page. Put the username and password y
 Then you should be able to see the case list page.
 
 If you click on Case 1 (Family trio) or case 8 (Solo), you should be able to click on Variants tab and see the variants for the case.
+
+## Load the IGV public tracks (optional)
+
+IGV in the portal shows a case's variants, plus 11 public reference tracks (ClinVar, dbVar, gnomAD
+SV/CNV, DGV, ClinGen, UCSC) in its *Tracks* menu. The API presigns them under
+`IGV_PUBLIC_TRACKS_PREFIX` (`s3://vcf/igv/`); until they exist, IGV lists the tracks but their files
+404. Build them once with the DAG `Radiant - Import IGV Tracks`: trigger it with its defaults (the
+prefix comes from `RADIANT_IGV_TRACKS_S3_PREFIX`), or tick `import_igv_tracks` when triggering
+`Radiant - Import Open Data`.
+
+It downloads the full upstream files (gnomAD SV alone is 1.7 GB) and converts them in up to 4 pods
+at once, each staging up to 16 GiB on the VM's disk: expect 20-30 minutes, and don't run it next to
+a VCF import. Check the result:
+```
+kubectl run s3ls --rm -i --restart=Never --image=amazon/aws-cli:2.31.19 \
+  --env AWS_ACCESS_KEY_ID=admin --env AWS_SECRET_ACCESS_KEY=password --env AWS_DEFAULT_REGION=us-east-1 \
+  -- --endpoint-url http://radiant-rustfs:9000 s3 ls s3://vcf/igv/
+```
+22 files: each track and its `.tbi`.
+
+Needs the `radiant-rustfs` line in `/etc/hosts` (see [Edit /etc/host file](#edit-etchost-file)) and
+the CORS rule the bucket init job sets on `vcf`. The case alignments are not available: the sandbox's
+CRAM documents are test fixtures whose URL is a bare prefix, and no CRAM is seeded.
 
 ## Enforce Ranger access control, as in QA (optional)
 
